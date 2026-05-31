@@ -10,33 +10,42 @@ This project is a web-based GNSS/Satellite simulation tool. Since it uses asynch
 ## Getting Started
 
 ### 1. Clone the Repository
+
 ```bash
 git clone <repository-url>
 cd Orientable-stargazer
 ```
 
 ### 2. Run a Local Web Server
+
 You can use any local web server. Here are a few common options:
 
 #### Option A: Python 3 (Recommended)
+
 If you have Python installed, run:
+
 ```bash
 python3 -m http.server 8000
 ```
 
 #### Option B: Node.js (npx)
+
 If you have Node.js installed, you can use `http-server` without installing it:
+
 ```bash
 npx http-server -p 8000
 ```
 
 #### Option C: PHP
+
 ```bash
 php -S localhost:8000
 ```
 
 ### 3. Access the Application
+
 Open your web browser and navigate to:
+
 ```
 http://localhost:8000
 ```
@@ -49,10 +58,10 @@ Once the application is running:
 2.  **Adjust Time:** Set the simulation start time using the date picker.
 3.  **Configure Mask:** Set the **Elevation Mask** (in degrees) to filter out satellites blocked by the horizon or obstacles.
 4.  **Recalculate:** Click the **RECALCULATE** button to update the simulation.
-5.  **Analyze:** 
-    *   Toggle between **2D Map** and **3D Globe** views.
-    *   Scroll down the sidebar to view the **DOP Values** and **Visible Satellites** breakdown.
-    *   Inspect the **Skyplot** and **Visible Count** charts at the bottom.
+5.  **Analyze:**
+    - Toggle between **2D Map** and **3D Globe** views.
+    - Scroll down the sidebar to view the **DOP Values** and **Visible Satellites** breakdown.
+    - Inspect the **Skyplot** and **Visible Count** charts at the bottom.
 
 ## Troubleshooting
 

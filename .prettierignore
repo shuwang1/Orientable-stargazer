@@ -1,0 +1,6 @@
+orientable_stargazer/lib/**
+node_modules/**
+dist/**
+test-results/**
+playwright-report/**
+blob-report/**

@@ -1,0 +1,35 @@
+{
+  "name": "orientable-stargazer",
+  "version": "1.0.0",
+  "description": "**Orientable Stargazer** is a high-fidelity GNSS Constellation Simulator and Visualizer. It features a modern, high-contrast \"Cyber/Instrument\" dashboard designed for real-time analysis of global navigation satellite systems.",
+  "main": "index.js",
+  "scripts": {
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "start": "http-server . -p 8080",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shuwang1/Orientable-stargazer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/shuwang1/Orientable-stargazer/issues"
+  },
+  "homepage": "https://github.com/shuwang1/Orientable-stargazer#readme",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
+    "http-server": "^14.1.1",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
+    "vitest": "^4.1.7"
+  }
+}

@@ -1,32 +1,32 @@
 [
-    {
-        "name": "Tokyo, Japan",
-        "lat": 35.6762,
-        "lon": 139.6503,
-        "datetime": "2026-05-28T09:00"
-    },
-    {
-        "name": "London, UK",
-        "lat": 51.5074,
-        "lon": -0.1278,
-        "datetime": "2026-05-28T12:00"
-    },
-    {
-        "name": "New York, USA",
-        "lat": 40.7128,
-        "lon": -74.0060,
-        "datetime": "2026-05-28T09:00"
-    },
-    {
-        "name": "Sydney, Australia",
-        "lat": -33.8688,
-        "lon": 151.2093,
-        "datetime": "2026-05-28T10:00"
-    },
-    {
-        "name": "Cape Town, South Africa",
-        "lat": -33.9249,
-        "lon": 18.4241,
-        "datetime": "2026-05-28T14:00"
-    }
+  {
+    "name": "Tokyo, Japan",
+    "lat": 35.6762,
+    "lon": 139.6503,
+    "datetime": "2026-05-28T09:00"
+  },
+  {
+    "name": "London, UK",
+    "lat": 51.5074,
+    "lon": -0.1278,
+    "datetime": "2026-05-28T12:00"
+  },
+  {
+    "name": "New York, USA",
+    "lat": 40.7128,
+    "lon": -74.006,
+    "datetime": "2026-05-28T09:00"
+  },
+  {
+    "name": "Sydney, Australia",
+    "lat": -33.8688,
+    "lon": 151.2093,
+    "datetime": "2026-05-28T10:00"
+  },
+  {
+    "name": "Cape Town, South Africa",
+    "lat": -33.9249,
+    "lon": 18.4241,
+    "datetime": "2026-05-28T14:00"
+  }
 ]

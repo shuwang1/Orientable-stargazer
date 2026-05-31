@@ -1,2157 +1,2292 @@
 <!------------------------------------------------------------------------------
 * Copyright (C) 2026 Shu Wang <shuwang1@outlook.com>, All Rights Reserved
 *------------------------------------------------------------------------------>
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Orientable Skyview v0.1</title>
-    
+
     <!-- Google Fonts for Cyber/Instrument Theme -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Outfit:wght@300;400;600&display=swap">
-    
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Outfit:wght@300;400;600&display=swap"
+    />
+
     <!-- Leaflet.js Dark Mode Maps -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@joergdietrich/leaflet.terminator@1.0.0/L.Terminator.min.js"></script>
-    
+
     <!-- Modern Highcharts -->
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/highcharts-more.js"></script>
     <script src="https://code.highcharts.com/modules/exporting.js"></script>
-    
+
     <!-- Local Math / Geometry libraries -->
     <script type="text/javascript" src="orientable_stargazer/lib/satellite/satellite.js"></script>
     <script type="text/javascript" src="orientable_stargazer/lib/sylvester/sylvester.js"></script>
-    
+
+    <script type="module">
+      import { parse_tle } from './src/tle-parser.js';
+      import {
+        rotate3D,
+        getObserverEcef,
+        compute_satazel,
+        compute_dop,
+        check_azel,
+      } from './src/calculations.js';
+      import { D2R, R2D, SYSTEM_COLORS, MAX_NTIMES } from './src/constants.js';
+
+      window.parse_tle_mod = parse_tle;
+      window.rotate3D_mod = rotate3D;
+      window.getObserverEcef_mod = getObserverEcef;
+      window.compute_satazel_mod = compute_satazel;
+      window.compute_dop_mod = compute_dop;
+      window.check_azel_mod = check_azel;
+      window.D2R_mod = D2R;
+      window.R2D_mod = R2D;
+      window.SYSTEM_COLORS_mod = SYSTEM_COLORS;
+      window.MAX_NTIMES_mod = MAX_NTIMES;
+    </script>
+
     <style type="text/css">
-        :root {
-            --bg-deep: #090d16;
-            --bg-card: rgba(19, 27, 46, 0.7);
-            --bg-sidebar: #0f1524;
-            --border-glow: rgba(0, 240, 255, 0.15);
-            --text-glow: #00f0ff;
-            --font-main: 'Outfit', sans-serif;
-            --font-stats: 'Orbitron', sans-serif;
-        }
+      :root {
+        --bg-deep: #090d16;
+        --bg-card: rgba(19, 27, 46, 0.7);
+        --bg-sidebar: #0f1524;
+        --border-glow: rgba(0, 240, 255, 0.15);
+        --text-glow: #00f0ff;
+        --font-main: 'Outfit', sans-serif;
+        --font-stats: 'Orbitron', sans-serif;
+      }
 
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--bg-deep);
-            color: #c5d1e6;
-            font-family: var(--font-main);
-            overflow: hidden;
-        }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--bg-deep);
+        color: #c5d1e6;
+        font-family: var(--font-main);
+        overflow: hidden;
+      }
 
-        /* App Layout */
+      /* App Layout */
+      #app-container {
+        display: grid;
+        grid-template-columns: var(--sidebar-width, 340px) 5px 1fr;
+        width: 100%;
+        height: 100vh;
+      }
+
+      .resizer {
+        background-color: var(--border-glow);
+        cursor: ew-resize;
+        width: 5px;
+        z-index: 20;
+        transition: background-color 0.2s;
+      }
+
+      .resizer:hover,
+      .resizer:active {
+        background-color: #00f0ff;
+        box-shadow: 0 0 10px #00f0ff;
+      }
+
+      /* Sidebar styling with Glassmorphism */
+      #sidebar {
+        background-color: var(--bg-sidebar);
+        border-right: 1px solid var(--border-glow);
+        box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        overflow-y: auto;
+        z-index: 10;
+      }
+
+      .logo {
+        font-family: var(--font-stats);
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--text-glow);
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .logo-subtitle {
+        font-size: 0.75rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.4);
+        margin-bottom: 25px;
+      }
+
+      .sidebar-section {
+        background: var(--bg-card);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(8px);
+      }
+
+      .sidebar-section h2 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 0;
+        margin-bottom: 12px;
+        color: var(--text-glow);
+        font-family: var(--font-stats);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 6px;
+      }
+
+      .form-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .form-group.single {
+        grid-template-columns: 1fr;
+      }
+
+      label {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.6);
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      input {
+        width: 100%;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: #ffffff;
+        padding: 6px 8px;
+        font-size: 0.85rem;
+        font-family: var(--font-stats);
+        box-sizing: border-box;
+        transition: all 0.2s ease;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--text-glow);
+        box-shadow: 0 0 5px rgba(0, 240, 255, 0.3);
+      }
+
+      button.btn-primary {
+        background: linear-gradient(135deg, #00f0ff, #0072ff);
+        border: none;
+        color: #ffffff;
+        font-family: var(--font-stats);
+        font-weight: 700;
+        font-size: 0.8rem;
+        letter-spacing: 1px;
+        padding: 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        width: 100%;
+        text-transform: uppercase;
+        box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+        transition: all 0.2s ease;
+      }
+
+      button.btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+      }
+
+      button.btn-primary:active {
+        transform: translateY(1px);
+      }
+
+      /* Telemetry Cards */
+      .telemetry-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .telemetry-item {
+        background: rgba(0, 0, 0, 0.25);
+        border-radius: 6px;
+        padding: 8px 10px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.03);
+      }
+
+      .telemetry-item .label {
+        font-size: 0.65rem;
+        color: rgba(255, 255, 255, 0.4);
+        display: block;
+        margin-bottom: 2px;
+        text-transform: uppercase;
+      }
+
+      .telemetry-item .value {
+        font-family: var(--font-stats);
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-glow);
+      }
+
+      /* Main Display Panels */
+      #main-panel {
+        display: grid;
+        grid-template-rows: var(--top-panel-height, 52%) 5px 1fr;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .resizer-horizontal {
+        background-color: var(--border-glow);
+        cursor: ns-resize;
+        height: 5px;
+        z-index: 20;
+        transition: background-color 0.2s;
+      }
+
+      .resizer-horizontal:hover,
+      .resizer-horizontal:active {
+        background-color: #00f0ff;
+        box-shadow: 0 0 10px #00f0ff;
+      }
+
+      /* Visual Stage (Map & Globe) */
+      #visual-stage {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        border-bottom: 1px solid var(--border-glow);
+      }
+
+      .visual-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+      }
+
+      .visual-panel.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      #map {
+        background-color: var(--bg-deep);
+      }
+
+      #globe-container {
+        background-color: #050810;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      #globe-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        cursor: grab;
+      }
+
+      #globe-canvas:active {
+        cursor: grabbing;
+      }
+
+      #globe-overlay-stats {
+        position: absolute;
+        bottom: 15px;
+        left: 15px;
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.4);
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 4px 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      /* View Toggle Widget */
+      .visual-toggle-bar {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        z-index: 1000;
+        display: flex;
+        background: rgba(15, 21, 36, 0.85);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 3px;
+      }
+
+      .toggle-btn {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.5);
+        padding: 6px 14px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        font-family: var(--font-stats);
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+      }
+
+      .toggle-btn.active {
+        background: var(--text-glow);
+        color: #0b0f19;
+        box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+      }
+
+      /* Charts Section */
+      #charts-stage {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        height: 100%;
+        background-color: #0d1322;
+      }
+
+      .chart-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        border-right: 1px solid rgba(0, 240, 255, 0.05);
+      }
+
+      .chart-wrapper:last-child {
+        border-right: none;
+      }
+
+      #nsatchart,
+      #skychart {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* Loading Screen Overlays */
+      #loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #090d16;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        transition: opacity 0.4s ease;
+      }
+
+      .spinner {
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(0, 240, 255, 0.1);
+        border-radius: 50%;
+        border-top-color: var(--text-glow);
+        animation: spin 1s ease-in-out infinite;
+        margin-bottom: 20px;
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+      }
+
+      #loading-text {
+        font-family: var(--font-stats);
+        color: #ffffff;
+        font-size: 0.9rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Leaflet custom styling */
+      .observer-marker-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background-color: var(--text-glow);
+        border: 3px solid #ffffff;
+        box-shadow: 0 0 12px var(--text-glow);
+        cursor: move;
+      }
+
+      .sat-marker-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        border: 1.5px solid #ffffff;
+      }
+
+      /* Mobile Responsive viewports */
+      @media (max-width: 992px) {
         #app-container {
-            display: grid;
-            grid-template-columns: var(--sidebar-width, 340px) 5px 1fr;
-            width: 100%;
-            height: 100vh;
+          grid-template-columns: 1fr;
+          grid-template-rows: auto 1fr;
+          height: 100%;
+          overflow: auto;
         }
-
-        .resizer {
-            background-color: var(--border-glow);
-            cursor: ew-resize;
-            width: 5px;
-            z-index: 20;
-            transition: background-color 0.2s;
-        }
-
-        .resizer:hover, .resizer:active {
-            background-color: #00f0ff;
-            box-shadow: 0 0 10px #00f0ff;
-        }
-
-        /* Sidebar styling with Glassmorphism */
         #sidebar {
-            background-color: var(--bg-sidebar);
-            border-right: 1px solid var(--border-glow);
-            box-shadow: 4px 0 15px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            overflow-y: auto;
-            z-index: 10;
+          border-right: none;
+          border-bottom: 1px solid var(--border-glow);
+          height: auto;
         }
-
-        .logo {
-            font-family: var(--font-stats);
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: var(--text-glow);
-            text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .logo-subtitle {
-            font-size: 0.75rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            color: rgba(255,255,255,0.4);
-            margin-bottom: 25px;
-        }
-
-        .sidebar-section {
-            background: var(--bg-card);
-            border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-            backdrop-filter: blur(8px);
-        }
-
-        .sidebar-section h2 {
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 0;
-            margin-bottom: 12px;
-            color: var(--text-glow);
-            font-family: var(--font-stats);
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-            padding-bottom: 6px;
-        }
-
-        .form-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .form-group.single {
-            grid-template-columns: 1fr;
-        }
-
-        label {
-            font-size: 0.75rem;
-            color: rgba(255,255,255,0.6);
-            display: block;
-            margin-bottom: 4px;
-        }
-
-        input {
-            width: 100%;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 4px;
-            color: #ffffff;
-            padding: 6px 8px;
-            font-size: 0.85rem;
-            font-family: var(--font-stats);
-            box-sizing: border-box;
-            transition: all 0.2s ease;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--text-glow);
-            box-shadow: 0 0 5px rgba(0, 240, 255, 0.3);
-        }
-
-        button.btn-primary {
-            background: linear-gradient(135deg, #00f0ff, #0072ff);
-            border: none;
-            color: #ffffff;
-            font-family: var(--font-stats);
-            font-weight: 700;
-            font-size: 0.8rem;
-            letter-spacing: 1px;
-            padding: 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            text-transform: uppercase;
-            box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
-            transition: all 0.2s ease;
-        }
-
-        button.btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
-        }
-
-        button.btn-primary:active {
-            transform: translateY(1px);
-        }
-
-        /* Telemetry Cards */
-        .telemetry-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .telemetry-item {
-            background: rgba(0,0,0,0.25);
-            border-radius: 6px;
-            padding: 8px 10px;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.03);
-        }
-
-        .telemetry-item .label {
-            font-size: 0.65rem;
-            color: rgba(255,255,255,0.4);
-            display: block;
-            margin-bottom: 2px;
-            text-transform: uppercase;
-        }
-
-        .telemetry-item .value {
-            font-family: var(--font-stats);
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--text-glow);
-        }
-
-        /* Main Display Panels */
         #main-panel {
-            display: grid;
-            grid-template-rows: var(--top-panel-height, 52%) 5px 1fr;
-            height: 100%;
-            overflow: hidden;
+          grid-template-rows: 400px auto;
+          height: auto;
+          overflow: visible;
         }
-
-        .resizer-horizontal {
-            background-color: var(--border-glow);
-            cursor: ns-resize;
-            height: 5px;
-            z-index: 20;
-            transition: background-color 0.2s;
-        }
-
-        .resizer-horizontal:hover, .resizer-horizontal:active {
-            background-color: #00f0ff;
-            box-shadow: 0 0 10px #00f0ff;
-        }
-
-        /* Visual Stage (Map & Globe) */
         #visual-stage {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            border-bottom: 1px solid var(--border-glow);
+          height: 400px;
         }
-
-        .visual-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
-
-        .visual-panel.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        #map {
-            background-color: var(--bg-deep);
-        }
-
-        #globe-container {
-            background-color: #050810;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        #globe-canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-            cursor: grab;
-        }
-
-        #globe-canvas:active {
-            cursor: grabbing;
-        }
-
-        #globe-overlay-stats {
-            position: absolute;
-            bottom: 15px;
-            left: 15px;
-            font-size: 0.7rem;
-            color: rgba(255, 255, 255, 0.4);
-            pointer-events: none;
-            background: rgba(0,0,0,0.6);
-            padding: 4px 10px;
-            border-radius: 4px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-
-        /* View Toggle Widget */
-        .visual-toggle-bar {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 1000;
-            display: flex;
-            background: rgba(15, 21, 36, 0.85);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 6px;
-            padding: 3px;
-        }
-
-        .toggle-btn {
-            background: transparent;
-            border: none;
-            color: rgba(255, 255, 255, 0.5);
-            padding: 6px 14px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            font-family: var(--font-stats);
-            cursor: pointer;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-        }
-
-        .toggle-btn.active {
-            background: var(--text-glow);
-            color: #0b0f19;
-            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
-        }
-
-        /* Charts Section */
         #charts-stage {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            height: 100%;
-            background-color: #0d1322;
+          grid-template-columns: 1fr;
+          height: auto;
         }
-
         .chart-wrapper {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            box-sizing: border-box;
-            border-right: 1px solid rgba(0,240,255,0.05);
+          height: 400px;
+          border-right: none;
+          border-bottom: 1px solid rgba(0, 240, 255, 0.05);
         }
-
-        .chart-wrapper:last-child {
-            border-right: none;
-        }
-
-        #nsatchart, #skychart {
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Loading Screen Overlays */
-        #loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #090d16;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            transition: opacity 0.4s ease;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid rgba(0, 240, 255, 0.1);
-            border-radius: 50%;
-            border-top-color: var(--text-glow);
-            animation: spin 1s ease-in-out infinite;
-            margin-bottom: 20px;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
-        }
-
-        #loading-text {
-            font-family: var(--font-stats);
-            color: #ffffff;
-            font-size: 0.9rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Leaflet custom styling */
-        .observer-marker-dot {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background-color: var(--text-glow);
-            border: 3px solid #ffffff;
-            box-shadow: 0 0 12px var(--text-glow);
-            cursor: move;
-        }
-
-        .sat-marker-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            border: 1.5px solid #ffffff;
-        }
-
-        /* Mobile Responsive viewports */
-        @media (max-width: 992px) {
-            #app-container {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto 1fr;
-                height: 100%;
-                overflow: auto;
-            }
-            #sidebar {
-                border-right: none;
-                border-bottom: 1px solid var(--border-glow);
-                height: auto;
-            }
-            #main-panel {
-                grid-template-rows: 400px auto;
-                height: auto;
-                overflow: visible;
-            }
-            #visual-stage {
-                height: 400px;
-            }
-            #charts-stage {
-                grid-template-columns: 1fr;
-                height: auto;
-            }
-            .chart-wrapper {
-                height: 400px;
-                border-right: none;
-                border-bottom: 1px solid rgba(0,240,255,0.05);
-            }
-        }
+      }
     </style>
-</head>
-<body>
-    
+  </head>
+  <body>
     <!-- Loader screen -->
     <div id="loading-overlay">
-        <div class="spinner"></div>
-        <div id="loading-text">Calibrating GNSS Receivers...</div>
+      <div class="spinner"></div>
+      <div id="loading-text">Calibrating GNSS Receivers...</div>
     </div>
 
     <div id="app-container">
-        <!-- Sidebar Navigation -->
-        <div id="sidebar">
-            <div class="logo">
-                <span style="color:#ffffff;">📡</span> ORIENTABLE STARGAZER 
-            </div>
-            <div class="logo-subtitle">constellation monitor</div>
-            
-            <!-- Receiver Controls -->
-            <div class="sidebar-section">
-                <h2>OBSERVER LOCATION</h2>
-                <div class="form-group single">
-                    <label for="location-preset">Preset Configuration</label>
-                    <select id="location-preset">
-                        <option value="">Custom Location</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <div>
-                        <label for="lat-input">Latitude (°)</label>
-                        <input type="number" id="lat-input" step="0.0001" min="-90" max="90">
-                    </div>
-                    <div>
-                        <label for="lon-input">Longitude (°)</label>
-                        <input type="number" id="lon-input" step="0.0001" min="-180" max="180">
-                    </div>
-                </div>
-                <div class="form-group single">
-                    <button class="btn-primary" id="btn-recalculate">Update Station</button>
-                </div>
-            </div>
+      <!-- Sidebar Navigation -->
+      <div id="sidebar">
+        <div class="logo"><span style="color: #ffffff">📡</span> ORIENTABLE STARGAZER</div>
+        <div class="logo-subtitle">constellation monitor</div>
 
-            <!-- Parameters Section -->
-            <div class="sidebar-section">
-                <h2>PARAMETERS</h2>
-                <div class="form-group">
-                    <div>
-                        <label for="mask-input">Elevation Mask (°)</label>
-                        <input type="number" id="mask-input" min="0" max="90">
-                    </div>
-                    <div>
-                        <label for="offset-input">UTC Offset (hr)</label>
-                        <input type="number" id="offset-input">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div>
-                        <label for="interval-input">Interval (min)</label>
-                        <input type="number" id="interval-input" min="1">
-                    </div>
-                    <div>
-                        <label for="steps-input">Steps</label>
-                        <input type="number" id="steps-input" min="1" max="200">
-                    </div>
-                </div>
-                <div class="form-group single">
-                    <label for="start-time-input">Start Time (Local)</label>
-                    <input type="datetime-local" id="start-time-input">
-                </div>
+        <!-- Receiver Controls -->
+        <div class="sidebar-section">
+          <h2>OBSERVER LOCATION</h2>
+          <div class="form-group single">
+            <label for="location-preset">Preset Configuration</label>
+            <select id="location-preset">
+              <option value="">Custom Location</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div>
+              <label for="lat-input">Latitude (°)</label>
+              <input type="number" id="lat-input" step="0.0001" min="-90" max="90" />
             </div>
-
-            <!-- Live Telemetry Stats -->
-            <div class="sidebar-section">
-                <h2>RECEIVER TELEMETRY</h2>
-                <div class="telemetry-grid">
-                    <div class="telemetry-item">
-                        <span class="label">PDOP</span>
-                        <span class="value" id="val-pdop">--</span>
-                    </div>
-                    <div class="telemetry-item">
-                        <span class="label">Sats Tracked</span>
-                        <span class="value" id="val-nsat">--</span>
-                    </div>
-                    <div class="telemetry-item">
-                        <span class="label">HDOP</span>
-                        <span class="value" id="val-hdop">--</span>
-                    </div>
-                    <div class="telemetry-item">
-                        <span class="label">VDOP</span>
-                        <span class="value" id="val-vdop">--</span>
-                    </div>
-                </div>
+            <div>
+              <label for="lon-input">Longitude (°)</label>
+              <input type="number" id="lon-input" step="0.0001" min="-180" max="180" />
             </div>
-            
-            <div style="margin-top:auto; font-size:10px; color:rgba(255,255,255,0.25); text-align:center; font-family: var(--font-stats)">
-                © 2026 Shu Wang, All Rights Reserved
-            </div>
+          </div>
+          <div class="form-group single">
+            <button class="btn-primary" id="btn-recalculate">Update Station</button>
+          </div>
         </div>
 
-        <div class="resizer" id="dragMe"></div>
-
-        <!-- Main Workspace -->
-        <div id="main-panel">
-            <!-- 2D Map & 3D Globe Stage -->
-            <div id="visual-stage">
-                <!-- 2D Leaflet Map -->
-                <div id="map" class="visual-panel active"></div>
-                
-                <!-- 3D Globe canvas -->
-                <div id="globe-container" class="visual-panel">
-                    <canvas id="globe-canvas"></canvas>
-                    <div id="globe-overlay-stats">
-                        <span id="globe-pitch">Elev: 0°</span>
-                        <span id="globe-yaw">Azim: 0°</span>
-                    </div>
-                </div>
-                
-                <!-- Overlay toggles -->
-                <div class="visual-toggle-bar">
-                    <button id="btn-toggle-2d" class="toggle-btn active">2D MAP</button>
-                    <button id="btn-toggle-3d" class="toggle-btn">3D GLOBE</button>
-                </div>
+        <!-- Parameters Section -->
+        <div class="sidebar-section">
+          <h2>PARAMETERS</h2>
+          <div class="form-group">
+            <div>
+              <label for="mask-input">Elevation Mask (°)</label>
+              <input type="number" id="mask-input" min="0" max="90" />
             </div>
-
-            <div class="resizer-horizontal" id="dragMe-horizontal"></div>
-
-            <!-- Skyplot & Sat Count Charts -->
-            <div id="charts-stage">
-                <div class="chart-wrapper">
-                    <div id="skychart"></div>
-                </div>
-                <div class="chart-wrapper">
-                    <div id="nsatchart"></div>
-                </div>
+            <div>
+              <label for="offset-input">UTC Offset (hr)</label>
+              <input type="number" id="offset-input" />
             </div>
+          </div>
+          <div class="form-group">
+            <div>
+              <label for="interval-input">Interval (min)</label>
+              <input type="number" id="interval-input" min="1" />
+            </div>
+            <div>
+              <label for="steps-input">Steps</label>
+              <input type="number" id="steps-input" min="1" max="200" />
+            </div>
+          </div>
+          <div class="form-group single">
+            <label for="start-time-input">Start Time (Local)</label>
+            <input type="datetime-local" id="start-time-input" />
+          </div>
         </div>
+
+        <!-- Live Telemetry Stats -->
+        <div class="sidebar-section">
+          <h2>RECEIVER TELEMETRY</h2>
+          <div class="telemetry-grid">
+            <div class="telemetry-item">
+              <span class="label">PDOP</span>
+              <span class="value" id="val-pdop">--</span>
+            </div>
+            <div class="telemetry-item">
+              <span class="label">Sats Tracked</span>
+              <span class="value" id="val-nsat">--</span>
+            </div>
+            <div class="telemetry-item">
+              <span class="label">HDOP</span>
+              <span class="value" id="val-hdop">--</span>
+            </div>
+            <div class="telemetry-item">
+              <span class="label">VDOP</span>
+              <span class="value" id="val-vdop">--</span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          style="
+            margin-top: auto;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.25);
+            text-align: center;
+            font-family: var(--font-stats);
+          "
+        >
+          © 2026 Shu Wang, All Rights Reserved
+        </div>
+      </div>
+
+      <div class="resizer" id="dragMe"></div>
+
+      <!-- Main Workspace -->
+      <div id="main-panel">
+        <!-- 2D Map & 3D Globe Stage -->
+        <div id="visual-stage">
+          <!-- 2D Leaflet Map -->
+          <div id="map" class="visual-panel active"></div>
+
+          <!-- 3D Globe canvas -->
+          <div id="globe-container" class="visual-panel">
+            <canvas id="globe-canvas"></canvas>
+            <div id="globe-overlay-stats">
+              <span id="globe-pitch">Elev: 0°</span>
+              <span id="globe-yaw">Azim: 0°</span>
+            </div>
+          </div>
+
+          <!-- Overlay toggles -->
+          <div class="visual-toggle-bar">
+            <button id="btn-toggle-2d" class="toggle-btn active">2D MAP</button>
+            <button id="btn-toggle-3d" class="toggle-btn">3D GLOBE</button>
+          </div>
+        </div>
+
+        <div class="resizer-horizontal" id="dragMe-horizontal"></div>
+
+        <!-- Skyplot & Sat Count Charts -->
+        <div id="charts-stage">
+          <div class="chart-wrapper">
+            <div id="skychart"></div>
+          </div>
+          <div class="chart-wrapper">
+            <div id="nsatchart"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Core App Logic -->
     <script type="text/javascript">
-        // Centralized Logger Utility
-        const Logger = {
-            LEVELS: { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 },
-            level: 1, // 0:DEBUG, 1:INFO, 2:WARN, 3:ERROR
+      // Centralized Logger Utility
+      const Logger = {
+        LEVELS: { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 },
+        level: 1, // 0:DEBUG, 1:INFO, 2:WARN, 3:ERROR
 
-            _format(levelName, module, message) {
-                const timestamp = new Date().toISOString().split('T')[1].split('Z')[0];
-                return `[${timestamp}] [${levelName}] [${module}] ${message}`;
-            },
+        _format(levelName, module, message) {
+          const timestamp = new Date().toISOString().split('T')[1].split('Z')[0];
+          return `[${timestamp}] [${levelName}] [${module}] ${message}`;
+        },
 
-            debug(module, message, ...args) {
-                if (this.level <= this.LEVELS.DEBUG) console.debug(this._format('DEBUG', module, message), ...args);
-            },
-            info(module, message, ...args) {
-                if (this.level <= this.LEVELS.INFO) console.info(this._format('INFO', module, message), ...args);
-            },
-            warn(module, message, ...args) {
-                if (this.level <= this.LEVELS.WARN) console.warn(this._format('WARN', module, message), ...args);
-            },
-            error(module, message, ...args) {
-                if (this.level <= this.LEVELS.ERROR) console.error(this._format('ERROR', module, message), ...args);
+        debug(module, message, ...args) {
+          if (this.level <= this.LEVELS.DEBUG)
+            console.debug(this._format('DEBUG', module, message), ...args);
+        },
+        info(module, message, ...args) {
+          if (this.level <= this.LEVELS.INFO)
+            console.info(this._format('INFO', module, message), ...args);
+        },
+        warn(module, message, ...args) {
+          if (this.level <= this.LEVELS.WARN)
+            console.warn(this._format('WARN', module, message), ...args);
+        },
+        error(module, message, ...args) {
+          if (this.level <= this.LEVELS.ERROR)
+            console.error(this._format('ERROR', module, message), ...args);
+        },
+      };
+
+      var map;
+      var mapMarker;
+      var terminator;
+      var satMarkers = {}; // Leaflet markers map
+
+      var orglat, orglon, orgllh;
+      var elemask, offhr, dop;
+      var tint, tintMs;
+      var maxntimes = 200;
+      var ntimes;
+      var tind = 0;
+      var times = new Array(maxntimes);
+      var pdops = new Array(maxntimes);
+      var pdopsPlotted = new Array(maxntimes);
+      var utcoffset;
+
+      // TLE Arrays
+      var gpstles = new Array(32);
+      var glotles = new Array(24);
+      var galtles = new Array(27);
+      var bdstles = new Array(35);
+      var qzstles = new Array(7);
+      var sbstles = new Array(23);
+
+      // Sat calculations
+      var gpsazels = new Array(maxntimes);
+      var gloazels = new Array(maxntimes);
+      var galazels = new Array(maxntimes);
+      var bdsazels = new Array(maxntimes);
+      var qzsazels = new Array(maxntimes);
+      var sbsazels = new Array(maxntimes);
+      var gpsllhs = new Array(maxntimes);
+      var glollhs = new Array(maxntimes);
+      var galllhs = new Array(maxntimes);
+      var bdsllhs = new Array(maxntimes);
+      var qzsllhs = new Array(maxntimes);
+      var sbsllhs = new Array(maxntimes);
+
+      // Active selections
+      var activeTrackPolyline = null;
+      var selectedSatSys = null;
+      var selectedSatIndex = -1;
+
+      var visstate = {
+        GPS: true,
+        GLONASS: true,
+        Galileo: true,
+        BeiDou: true,
+        QZSS: true,
+        SBAS: true,
+      };
+      var skyplts = {};
+      var nsatplts = {};
+      var skychart, nsatchart;
+      var D2R = Math.PI / 180;
+      var R2D = 180 / Math.PI;
+
+      var tledl, satlistdl;
+
+      // Colors matching modern theme
+      var systemColors = {
+        gps: '#ffaa00',
+        glo: '#ff3366',
+        gal: '#00f0ff',
+        bds: '#00ff66',
+        qzs: '#ff6600',
+        sbs: '#a020f0',
+      };
+
+      // Standard script lifecycle
+      window.addEventListener('DOMContentLoaded', async () => {
+        try {
+          // Initialize default options from URL params
+          initOptions();
+
+          // Set default datetime string
+          let now = new Date();
+          let tzOffset = now.getTimezoneOffset() * 60000;
+          let localISOTime = new Date(now - tzOffset).toISOString().slice(0, 16);
+          document.getElementById('start-time-input').value = localISOTime;
+
+          // Load location_presets
+          fetch('location_presets.json')
+            .then((r) => r.json())
+            .then((location_presets) => {
+              const select = document.getElementById('location-preset');
+              location_presets.forEach((p, idx) => {
+                let opt = document.createElement('option');
+                opt.value = idx;
+                opt.text = p.name;
+                select.appendChild(opt);
+              });
+              select.addEventListener('change', (e) => {
+                if (e.target.value !== '') {
+                  let p = location_presets[e.target.value];
+                  document.getElementById('lat-input').value = p.lat;
+                  document.getElementById('lon-input').value = p.lon;
+                  if (p.datetime) {
+                    document.getElementById('start-time-input').value = p.datetime;
+                  }
+                  document.getElementById('btn-recalculate').click();
+                }
+              });
+            })
+            .catch((e) => Logger.warn('INIT', 'location_presets not loading', e));
+
+          // Resizer logic
+          const resizer = document.getElementById('dragMe');
+          let isResizing = false;
+          resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'ew-resize';
+          });
+          // Horizontal Resizer logic
+          const resizerHorizontal = document.getElementById('dragMe-horizontal');
+          let isResizingHorizontal = false;
+          if (resizerHorizontal) {
+            resizerHorizontal.addEventListener('mousedown', (e) => {
+              isResizingHorizontal = true;
+              document.body.style.cursor = 'ns-resize';
+            });
+          }
+          document.addEventListener('mousemove', (e) => {
+            if (isResizing) {
+              let newWidth = e.clientX;
+              if (newWidth < 250) newWidth = 250;
+              if (newWidth > 600) newWidth = 600;
+              document
+                .getElementById('app-container')
+                .style.setProperty('--sidebar-width', `${newWidth}px`);
             }
+            if (isResizingHorizontal) {
+              let newHeight = (e.clientY / window.innerHeight) * 100;
+              if (newHeight < 30) newHeight = 30;
+              if (newHeight > 80) newHeight = 80;
+              document
+                .getElementById('main-panel')
+                .style.setProperty('--top-panel-height', `${newHeight}%`);
+            }
+          });
+          document.addEventListener('mouseup', () => {
+            if (isResizing) {
+              isResizing = false;
+              document.body.style.cursor = '';
+              if (typeof map !== 'undefined' && map) map.invalidateSize();
+              if (typeof resizeGlobeCanvas !== 'undefined') resizeGlobeCanvas();
+              if (typeof chartPolar !== 'undefined' && chartPolar) chartPolar.reflow();
+              if (typeof chartDOP !== 'undefined' && chartDOP) chartDOP.reflow();
+            }
+            if (isResizingHorizontal) {
+              isResizingHorizontal = false;
+              document.body.style.cursor = '';
+              if (typeof map !== 'undefined' && map) map.invalidateSize();
+              if (typeof resizeGlobeCanvas !== 'undefined') resizeGlobeCanvas();
+              if (typeof chartPolar !== 'undefined' && chartPolar) chartPolar.reflow();
+              if (typeof chartDOP !== 'undefined' && chartDOP) chartDOP.reflow();
+            }
+          });
+
+          // Fetch datasets asynchronously
+          Logger.info('DATA', 'Fetching satellite datasets...');
+          const [tleResponse, satListResponse] = await Promise.all([
+            fetch('orientable_stargazer/celestrak.txt'),
+            fetch('orientable_stargazer/satlist.txt'),
+          ]);
+
+          if (!tleResponse.ok || !satListResponse.ok) {
+            throw new Error('Unable to download satellite data files.');
+          }
+
+          tledl = await tleResponse.text();
+          satlistdl = await satListResponse.text();
+          Logger.info('DATA', 'Satellite data files downloaded successfully');
+
+          // Build initial satellite mappings
+          setupSatelliteData();
+
+          // Build interfaces
+          initLeafletMap();
+          init3DGlobe();
+          Logger.info('INIT', 'Map and Globe initialized');
+
+          // Perform math & charts render
+          runCalculation();
+
+          // Wire up UI events
+          setupUIHandlers();
+          Logger.info('INIT', 'Application ready');
+
+          // Gracefully hide Loader Screen
+          var loader = document.getElementById('loading-overlay');
+          loader.style.opacity = '0';
+          setTimeout(() => {
+            loader.style.display = 'none';
+          }, 400);
+        } catch (err) {
+          Logger.error('INIT', 'Initialization failed:', err);
+          document.getElementById('loading-text').innerHTML =
+            `<span style="color:#ff3366">INITIALIZATION ERROR</span><br><span style="font-size:11px; text-transform:none; margin-top:10px; display:block;">${err.message}</span>`;
+        }
+      });
+
+      // Initialize Option Variables from Query String
+      function initOptions() {
+        ntimes = getKey('ntimes', 24);
+        if (ntimes > maxntimes) ntimes = maxntimes;
+
+        tint = getKey('tint', 30);
+        tintMs = tint * 60 * 1000;
+
+        elemask = getKey('elemask', 10);
+
+        orglat = getKey('lat', 35.7);
+        orglon = getKey('lon', 139.8);
+
+        orgllh = {
+          latitude: orglat * D2R,
+          longitude: orglon * D2R,
+          height: 0,
         };
 
-        var map;
-        var mapMarker;
-        var terminator;
-        var satMarkers = {}; // Leaflet markers map
+        offhr = getKey('offhr', 0);
 
-        var orglat, orglon, orgllh;
-        var elemask, offhr, dop;
-        var tint, tintMs;
-        var maxntimes = 200;
-        var ntimes;
-        var tind = 0;
-        var times = new Array(maxntimes);
-        var pdops = new Array(maxntimes);
-        var pdopsPlotted = new Array(maxntimes);
-        var utcoffset; 
-        
-        // TLE Arrays
-        var gpstles = new Array(32);
-        var glotles = new Array(24);
-        var galtles = new Array(27);
-        var bdstles = new Array(35);
-        var qzstles = new Array(7);
-        var sbstles = new Array(23);
+        // Set fields values
+        document.getElementById('lat-input').value = orglat;
+        document.getElementById('lon-input').value = orglon;
+        document.getElementById('mask-input').value = elemask;
+        document.getElementById('offset-input').value = offhr;
+        document.getElementById('interval-input').value = tint;
+        document.getElementById('steps-input').value = ntimes;
+      }
 
-        // Sat calculations
-        var gpsazels = new Array(maxntimes);
-        var gloazels = new Array(maxntimes);
-        var galazels = new Array(maxntimes);
-        var bdsazels = new Array(maxntimes);
-        var qzsazels = new Array(maxntimes);
-        var sbsazels = new Array(maxntimes);
-        var gpsllhs = new Array(maxntimes);
-        var glollhs = new Array(maxntimes);
-        var galllhs = new Array(maxntimes);
-        var bdsllhs = new Array(maxntimes);
-        var qzsllhs = new Array(maxntimes);
-        var sbsllhs = new Array(maxntimes);
-        
-        // Active selections
-        var activeTrackPolyline = null;
-        var selectedSatSys = null;
-        var selectedSatIndex = -1;
+      // Get parameter by name
+      function getKey(key, def) {
+        var str = location.search.substring(1);
+        if (str) {
+          var x = str.split('&');
+          for (var i = 0; i < x.length; i++) {
+            var y = x[i].split('=');
+            if (y[0] == key) return Number(y[1]);
+          }
+          return def;
+        } else {
+          return def;
+        }
+      }
 
-        var visstate = { "GPS": true, "GLONASS": true, "Galileo": true, "BeiDou": true, "QZSS": true, "SBAS": true };
-        var skyplts = {};
-        var nsatplts = {};
-        var skychart, nsatchart;
-        var D2R = Math.PI / 180;
-        var R2D = 180 / Math.PI;
-        
-        var tledl, satlistdl;
+      // Robust parsing of TLE file
+      function parse_tle(tleall) {
+        return parse_tle_mod(tleall);
+      }
 
-        // Colors matching modern theme
-        var systemColors = {
-            'gps': '#ffaa00',
-            'glo': '#ff3366',
-            'gal': '#00f0ff',
-            'bds': '#00ff66',
-            'qzs': '#ff6600',
-            'sbs': '#a020f0'
-        };
+      // Map Satellites based on satlist.txt indices
+      function setupSatelliteData() {
+        var tles = parse_tle(tledl);
+        var sats = satlistdl
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        var nsats = sats.length;
 
-        // Standard script lifecycle
-        window.addEventListener('DOMContentLoaded', async () => {
-            try {
-                // Initialize default options from URL params
-                initOptions();
-                
-                // Set default datetime string
-                let now = new Date();
-                let tzOffset = now.getTimezoneOffset() * 60000;
-                let localISOTime = (new Date(now - tzOffset)).toISOString().slice(0, 16);
-                document.getElementById('start-time-input').value = localISOTime;
+        gpstles.fill(undefined);
+        glotles.fill(undefined);
+        galtles.fill(undefined);
+        bdstles.fill(undefined);
+        qzstles.fill(undefined);
+        sbstles.fill(undefined);
 
-                // Load location_presets
-                fetch("location_presets.json")
-                    .then(r => r.json())
-                    .then(location_presets => {
-                        const select = document.getElementById("location-preset");
-                        location_presets.forEach((p, idx) => {
-                            let opt = document.createElement("option");
-                            opt.value = idx;
-                            opt.text = p.name;
-                            select.appendChild(opt);
-                        });
-                        select.addEventListener("change", (e) => {
-                            if (e.target.value !== "") {
-                                let p = location_presets[e.target.value];
-                                document.getElementById("lat-input").value = p.lat;
-                                document.getElementById("lon-input").value = p.lon;
-                                if (p.datetime) {
-                                    document.getElementById("start-time-input").value = p.datetime;
-                                }
-                                document.getElementById("btn-recalculate").click();
-                            }
-                        });
-                    })
-                    .catch(e => Logger.warn('INIT', 'location_presets not loading', e));
+        for (var i = 0; i < nsats; i++) {
+          var fields = sats[i].split(',');
+          if (fields.length < 3) continue;
+          var satId = fields[2].trim();
 
-                // Resizer logic
-                const resizer = document.getElementById('dragMe');
-                let isResizing = false;
-                resizer.addEventListener('mousedown', (e) => {
-                    isResizing = true;
-                    document.body.style.cursor = 'ew-resize';
-                });
-                // Horizontal Resizer logic
-                const resizerHorizontal = document.getElementById('dragMe-horizontal');
-                let isResizingHorizontal = false;
-                if(resizerHorizontal) {
-                    resizerHorizontal.addEventListener('mousedown', (e) => {
-                        isResizingHorizontal = true;
-                        document.body.style.cursor = 'ns-resize';
-                    });
-                }
-                document.addEventListener('mousemove', (e) => {
-                    if (isResizing) {
-                        let newWidth = e.clientX;
-                        if (newWidth < 250) newWidth = 250;
-                        if (newWidth > 600) newWidth = 600;
-                        document.getElementById('app-container').style.setProperty('--sidebar-width', `${newWidth}px`);
-                    }
-                    if (isResizingHorizontal) {
-                        let newHeight = (e.clientY / window.innerHeight) * 100;
-                        if (newHeight < 30) newHeight = 30;
-                        if (newHeight > 80) newHeight = 80;
-                        document.getElementById('main-panel').style.setProperty('--top-panel-height', `${newHeight}%`);
-                    }
-                });
-                document.addEventListener('mouseup', () => {
-                    if (isResizing) {
-                        isResizing = false;
-                        document.body.style.cursor = '';
-                        if (typeof map !== 'undefined' && map) map.invalidateSize();
-                        if (typeof resizeGlobeCanvas !== 'undefined') resizeGlobeCanvas();
-                        if (typeof chartPolar !== 'undefined' && chartPolar) chartPolar.reflow();
-                        if (typeof chartDOP !== 'undefined' && chartDOP) chartDOP.reflow();
-                    }
-                    if (isResizingHorizontal) {
-                        isResizingHorizontal = false;
-                        document.body.style.cursor = '';
-                        if (typeof map !== 'undefined' && map) map.invalidateSize();
-                        if (typeof resizeGlobeCanvas !== 'undefined') resizeGlobeCanvas();
-                        if (typeof chartPolar !== 'undefined' && chartPolar) chartPolar.reflow();
-                        if (typeof chartDOP !== 'undefined' && chartDOP) chartDOP.reflow();
-                    }
-                });
+          if (satId in tles) {
+            var sptle = tles[satId].split(',');
+            var name = sptle[0];
+            var line1 = sptle[1];
+            var line2 = sptle[2];
 
-                // Fetch datasets asynchronously
-                Logger.info('DATA', 'Fetching satellite datasets...');
-                const [tleResponse, satListResponse] = await Promise.all([
-                    fetch("orientable_stargazer/celestrak.txt"),
-                    fetch("orientable_stargazer/satlist.txt")
-                ]);
+            var type = fields[0];
+            var index = Number(fields[1]);
 
-                if (!tleResponse.ok || !satListResponse.ok) {
-                    throw new Error("Unable to download satellite data files.");
-                }
-
-                tledl = await tleResponse.text();
-                satlistdl = await satListResponse.text();
-                Logger.info('DATA', 'Satellite data files downloaded successfully');
-
-                // Build initial satellite mappings
-                setupSatelliteData();
-
-                // Build interfaces
-                initLeafletMap();
-                init3DGlobe();
-                Logger.info('INIT', 'Map and Globe initialized');
-                
-                // Perform math & charts render
-                runCalculation();
-
-                // Wire up UI events
-                setupUIHandlers();
-                Logger.info('INIT', 'Application ready');
-
-                // Gracefully hide Loader Screen
-                var loader = document.getElementById('loading-overlay');
-                loader.style.opacity = '0';
-                setTimeout(() => { loader.style.display = 'none'; }, 400);
-
-            } catch (err) {
-                Logger.error('INIT', 'Initialization failed:', err);
-                document.getElementById('loading-text').innerHTML = 
-                    `<span style="color:#ff3366">INITIALIZATION ERROR</span><br><span style="font-size:11px; text-transform:none; margin-top:10px; display:block;">${err.message}</span>`;
+            switch (type) {
+              case '1':
+                gpstles[index - 1] = { name: name, line1: line1, line2: line2 };
+                break;
+              case '2':
+                sbstles[index - 120] = { name: name, line1: line1, line2: line2 };
+                break;
+              case '3':
+                glotles[index - 1] = { name: name, line1: line1, line2: line2 };
+                break;
+              case '4':
+                galtles[index - 1] = { name: name, line1: line1, line2: line2 };
+                break;
+              case '5':
+                qzstles[index - 193] = { name: name, line1: line1, line2: line2 };
+                break;
+              case '6':
+                bdstles[index - 1] = { name: name, line1: line1, line2: line2 };
+                break;
             }
+          }
+        }
+      }
+
+      // Initialize Leaflet 2D Map
+      function initLeafletMap() {
+        map = L.map('map', {
+          center: [orglat, orglon],
+          zoom: 3,
+          zoomControl: false,
+          attributionControl: true,
         });
 
-        // Initialize Option Variables from Query String
-        function initOptions() {
-            ntimes = getKey("ntimes", 24);
-            if (ntimes > maxntimes) ntimes = maxntimes;
-            
-            tint = getKey("tint", 30);
-            tintMs = tint * 60 * 1000;
-            
-            elemask = getKey("elemask", 10);
-            
-            orglat = getKey("lat", 35.7);
-            orglon = getKey("lon", 139.8);
-            
-            orgllh = {
-                "latitude": orglat * D2R,
-                "longitude": orglon * D2R,
-                "height": 0
-            };
-            
-            offhr = getKey("offhr", 0);
-            
-            // Set fields values
-            document.getElementById('lat-input').value = orglat;
-            document.getElementById('lon-input').value = orglon;
-            document.getElementById('mask-input').value = elemask;
-            document.getElementById('offset-input').value = offhr;
-            document.getElementById('interval-input').value = tint;
-            document.getElementById('steps-input').value = ntimes;
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        // Glowing CartoDB Dark Matter Tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          subdomains: 'abcd',
+          maxZoom: 20,
+        }).addTo(map);
+
+        // Add Day/Night Terminator
+        if (typeof L.terminator !== 'undefined') {
+          terminator = L.terminator().addTo(map);
         }
 
-        // Get parameter by name
-        function getKey(key, def) {
-            var str = location.search.substring(1);
-            if (str) {
-                var x = str.split("&");
-                for (var i = 0; i < x.length; i++) {
-                    var y = x[i].split("=");
-                    if (y[0] == key) return Number(y[1]);
+        // Vector observer marker
+        var obsIcon = L.divIcon({
+          className: 'observer-marker-icon',
+          html: '<div class="observer-marker-dot"></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10],
+        });
+
+        mapMarker = L.marker([orglat, orglon], {
+          draggable: true,
+          icon: obsIcon,
+        }).addTo(map);
+
+        mapMarker.on('dragend', function (ev) {
+          var pos = mapMarker.getLatLng();
+          orglat = pos.lat;
+          orglon = pos.lng;
+
+          document.getElementById('lat-input').value = orglat.toFixed(4);
+          document.getElementById('lon-input').value = orglon.toFixed(4);
+
+          onObserverChanged();
+        });
+      }
+
+      // Observer Location Changed Handler
+      function onObserverChanged() {
+        orgllh = {
+          latitude: orglat * D2R,
+          longitude: orglon * D2R,
+          height: 0,
+        };
+
+        // Recompute azimuth/elevations
+        for (var i = 0; i < ntimes; i++) {
+          run_compute_satazel(i);
+        }
+
+        // Recompute all PDOP intervals
+        for (var i = 0; i < ntimes; i++) {
+          var d = compute_dop(i);
+          pdops[i] = d['pdop'];
+          pdopsPlotted[i] = Math.min(25, d['pdop']);
+        }
+        dop = compute_dop(tind);
+
+        run_gen_skyplotdata(tind);
+        run_gen_nsatplotdata();
+
+        // Refresh visualizations
+        drawGlobe();
+        skychartdraw(skyplts);
+        nsatchartdraw(nsatplts, times, orgllh, elemask);
+        updateDOPDisplay();
+
+        // Redraw ground track if a satellite is selected
+        if (selectedSatSys && selectedSatIndex >= 0) {
+          drawSatelliteTrack(selectedSatSys, selectedSatIndex);
+        }
+      }
+
+      // Apply controls inputs clicked
+      function setupUIHandlers() {
+        document.getElementById('btn-recalculate').addEventListener('click', () => {
+          orglat = Number(document.getElementById('lat-input').value);
+          orglon = Number(document.getElementById('lon-input').value);
+          elemask = Number(document.getElementById('mask-input').value);
+          offhr = Number(document.getElementById('offset-input').value);
+          tint = Number(document.getElementById('interval-input').value);
+          tintMs = tint * 60 * 1000;
+          ntimes = Number(document.getElementById('steps-input').value);
+          if (ntimes > maxntimes) ntimes = maxntimes;
+
+          mapMarker.setLatLng([orglat, orglon]);
+          map.panTo([orglat, orglon]);
+
+          onObserverChanged();
+        });
+
+        // 2D/3D Toggles
+        var btn2D = document.getElementById('btn-toggle-2d');
+        var btn3D = document.getElementById('btn-toggle-3d');
+        var panel2D = document.getElementById('map');
+        var panel3D = document.getElementById('globe-container');
+
+        btn2D.addEventListener('click', () => {
+          btn2D.classList.add('active');
+          btn3D.classList.remove('active');
+          panel2D.classList.add('active');
+          panel3D.classList.remove('active');
+          setTimeout(() => {
+            map.invalidateSize();
+          }, 50);
+        });
+
+        btn3D.addEventListener('click', () => {
+          btn3D.classList.add('active');
+          btn2D.classList.remove('active');
+          panel3D.classList.add('active');
+          panel2D.classList.remove('active');
+          resizeGlobeCanvas();
+        });
+      }
+
+      // Perform Main Computations
+      function runCalculation() {
+        const start = performance.now();
+        var timeInputVal = document.getElementById('start-time-input').value;
+        var time = timeInputVal ? new Date(timeInputVal) : new Date();
+        utcoffset = time.getTimezoneOffset();
+        time.setHours(time.getHours() + offhr);
+
+        for (var i = 0; i < ntimes; i++) {
+          times[i] = new Date(time.getTime());
+          time.setMinutes(time.getMinutes() + tintMs / 1000 / 60);
+        }
+
+        for (var i = 0; i < ntimes; i++) {
+          run_compute_satllh(i);
+          run_compute_satazel(i);
+        }
+
+        // Precalculate PDOP sequences
+        for (var i = 0; i < ntimes; i++) {
+          var d = compute_dop(i);
+          pdops[i] = d['pdop'];
+          pdopsPlotted[i] = Math.min(25, d['pdop']);
+        }
+        dop = compute_dop(tind);
+
+        run_gen_skyplotdata(tind);
+        run_gen_nsatplotdata();
+
+        // Render
+        updateLeafletMarkers(tind);
+        drawGlobe();
+
+        skychartdraw(skyplts);
+        nsatchartdraw(nsatplts, times, orgllh, elemask);
+
+        updateDOPDisplay();
+        const end = performance.now();
+        Logger.info('PERF', `Full calculation cycle completed in ${(end - start).toFixed(2)}ms`);
+      }
+
+      // Draw Ground Track of Satellite on 2D map
+      function drawSatelliteTrack(sysStr, index) {
+        if (activeTrackPolyline) {
+          map.removeLayer(activeTrackPolyline);
+          activeTrackPolyline = null;
+        }
+
+        var llhArray;
+        switch (sysStr.toLowerCase()) {
+          case 'gps':
+            llhArray = gpsllhs;
+            break;
+          case 'glo':
+            llhArray = glollhs;
+            break;
+          case 'gal':
+            llhArray = galllhs;
+            break;
+          case 'bds':
+            llhArray = bdsllhs;
+            break;
+          case 'qzs':
+            llhArray = qzsllhs;
+            break;
+          case 'sbs':
+            llhArray = sbsllhs;
+            break;
+        }
+
+        if (!llhArray) return;
+
+        var latLons = [];
+        var color = systemColors[sysStr.toLowerCase()] || '#ffffff';
+
+        for (var i = 0; i < ntimes; i++) {
+          if (llhArray[i] && llhArray[i][index]) {
+            var lat = llhArray[i][index]['latitude'] * R2D;
+            var lon = llhArray[i][index]['longitude'] * R2D;
+
+            // Standard anti-wrapping boundaries
+            if (lon > 180) lon -= 360;
+            if (lon < -180) lon += 360;
+
+            if (!isNaN(lat) && !isNaN(lon)) {
+              latLons.push([lat, lon]);
+            }
+          }
+        }
+
+        if (latLons.length > 0) {
+          activeTrackPolyline = L.polyline(latLons, {
+            color: color,
+            weight: 2.5,
+            opacity: 0.8,
+            dashArray: '6, 6',
+          }).addTo(map);
+        }
+      }
+
+      // Update Map satellite positions
+      function updateLeafletMarkers(ind) {
+        if (terminator && times[ind]) {
+          terminator.setTime(times[ind]);
+        }
+        updateConstellationMarkers(gpsllhs[ind], gpstles, 'gps');
+        updateConstellationMarkers(glollhs[ind], glotles, 'glo');
+        updateConstellationMarkers(galllhs[ind], galtles, 'gal');
+        updateConstellationMarkers(bdsllhs[ind], bdstles, 'bds');
+        updateConstellationMarkers(qzsllhs[ind], qzstles, 'qzs', 193);
+        updateConstellationMarkers(sbsllhs[ind], sbstles, 'sbs', 120);
+      }
+
+      function updateConstellationMarkers(llhs, tles, sysKey, prnOffset = 1) {
+        if (!llhs) return;
+        var color = systemColors[sysKey];
+        var uppercaseSys =
+          sysKey === 'glo'
+            ? 'GLONASS'
+            : sysKey === 'bds'
+              ? 'BeiDou'
+              : sysKey === 'qzs'
+                ? 'QZSS'
+                : sysKey === 'sbs'
+                  ? 'SBAS'
+                  : sysKey.toUpperCase();
+
+        for (var i = 0; i < tles.length; i++) {
+          if (tles[i] && llhs[i]) {
+            var lat = llhs[i]['latitude'] * R2D;
+            var lon = llhs[i]['longitude'] * R2D;
+            if (lon > 180) lon -= 360;
+            if (lon < -180) lon += 360;
+
+            var key = sysKey + '_' + i;
+            var visible = visstate[uppercaseSys];
+
+            if (visible && !isNaN(lat) && !isNaN(lon)) {
+              var tooltip = `<b>${tles[i]['name']}</b><br>System: ${uppercaseSys}<br>PRN: ${i + prnOffset}<br>Lat: ${lat.toFixed(3)}°<br>Lon: ${lon.toFixed(3)}°`;
+
+              if (!satMarkers[key]) {
+                var icon = L.divIcon({
+                  className: `sat-marker-container sat-${sysKey}`,
+                  html: `<div class="sat-marker-dot" style="background-color: ${color}; box-shadow: 0 0 8px ${color}"></div>`,
+                  iconSize: [12, 12],
+                  iconAnchor: [6, 6],
+                });
+
+                // Custom Leaflet hover events
+                satMarkers[key] = L.marker([lat, lon], { icon: icon })
+                  .addTo(map)
+                  .bindTooltip(tooltip, { direction: 'top', permanent: false });
+
+                // Click listener
+                satMarkers[key].on(
+                  'click',
+                  ((s, idx) => {
+                    return () => {
+                      selectedSatSys = s;
+                      selectedSatIndex = idx;
+                      drawSatelliteTrack(s, idx);
+                      drawGlobe();
+                    };
+                  })(sysKey, i),
+                );
+              } else {
+                satMarkers[key].setLatLng([lat, lon]);
+                satMarkers[key].setTooltipContent(tooltip);
+                if (!map.hasLayer(satMarkers[key])) {
+                  satMarkers[key].addTo(map);
                 }
-                return def;
+              }
             } else {
-                return def;
+              if (satMarkers[key] && map.hasLayer(satMarkers[key])) {
+                map.removeLayer(satMarkers[key]);
+              }
             }
+          }
+        }
+      }
+
+      // Live telemetry updater
+      function updateDOPDisplay() {
+        var active = getActiveSatCount(tind);
+        document.getElementById('val-pdop').innerText =
+          dop['pdop'] > 99 ? '99.9+' : dop['pdop'].toFixed(2);
+        document.getElementById('val-hdop').innerText =
+          dop['hdop'] > 99 ? '99.9+' : dop['hdop'].toFixed(2);
+        document.getElementById('val-vdop').innerText =
+          dop['vdop'] > 99 ? '99.9+' : dop['vdop'].toFixed(2);
+        document.getElementById('val-nsat').innerText = active;
+
+        // Highlight poor geometry alerts
+        var pdopVal = dop['pdop'];
+        var pdopElem = document.getElementById('val-pdop');
+        if (pdopVal > 6) {
+          pdopElem.style.color = '#ff3366';
+        } else if (pdopVal > 3.5) {
+          pdopElem.style.color = '#ffaa00';
+        } else {
+          pdopElem.style.color = '#00f0ff';
+        }
+      }
+
+      function getActiveSatCount(ind) {
+        var total = 0;
+        var sysKeys = ['gps', 'glo', 'gal', 'bds', 'qzs', 'sbs'];
+        var dataLists = [
+          gpsazels[ind],
+          gloazels[ind],
+          galazels[ind],
+          bdsazels[ind],
+          qzsazels[ind],
+          sbsazels[ind],
+        ];
+        var activeKeys = ['GPS', 'GLONASS', 'Galileo', 'BeiDou', 'QZSS', 'SBAS'];
+
+        for (var k = 0; k < sysKeys.length; k++) {
+          if (!visstate[activeKeys[k]]) continue;
+          var list = dataLists[k];
+          if (list) {
+            for (var i = 0; i < list.length; i++) {
+              if (list[i] && list[i]['elevation'] > elemask) {
+                total++;
+              }
+            }
+          }
+        }
+        return total;
+      }
+
+      // Time navigation index changed
+      function onTimeIndexChanged(newInd) {
+        tind = newInd;
+
+        // Map markers updates
+        updateLeafletMarkers(tind);
+        if (selectedSatSys && selectedSatIndex >= 0) {
+          drawSatelliteTrack(selectedSatSys, selectedSatIndex);
         }
 
-        // Robust parsing of TLE file
-        function parse_tle(tleall) {
-            var tles = {};
-            var tlesplit = tleall.split(/\r?\n/).map(line => line.trim());
-            tlesplit = tlesplit.filter(line => line.length > 0);
-            
-            var ntle = Math.floor(tlesplit.length / 3);
-            for (var i = 0; i < ntle; i++) {
-                var nameLine = tlesplit[3 * i];
-                var line1 = tlesplit[3 * i + 1];
-                var line2 = tlesplit[3 * i + 2];
-                
-                if (line1 && line1.length >= 8) {
-                    var satId = line1.substring(2, 8).trim(); 
-                    tles[satId] = nameLine + "," + line1 + "," + line2;
-                }
+        // Radar skyplot updates
+        run_gen_skyplotdata(tind);
+        skychartdraw(skyplts);
+
+        // DOP math recalculation
+        dop = compute_dop(tind);
+        updateDOPDisplay();
+        drawGlobe();
+
+        // Refresh xAxis highcharts highlights
+        highlightActiveBarInChart(tind);
+      }
+
+      function highlightActiveBarInChart(index) {
+        if (!nsatchart) return;
+        nsatchart.xAxis[0].removePlotBand('active-time-band');
+        nsatchart.xAxis[0].addPlotBand({
+          id: 'active-time-band',
+          from: index - 0.45,
+          to: index + 0.45,
+          color: 'rgba(0, 240, 255, 0.08)',
+          borderColor: 'rgba(0, 240, 255, 0.4)',
+          borderWidth: 1,
+          zIndex: 5,
+        });
+      }
+
+      // TLE Propagation math callers
+      function run_compute_satllh(ind) {
+        gpsllhs[ind] = compute_satllh(gpstles, times[ind]);
+        glollhs[ind] = compute_satllh(glotles, times[ind]);
+        galllhs[ind] = compute_satllh(galtles, times[ind]);
+        bdsllhs[ind] = compute_satllh(bdstles, times[ind]);
+        qzsllhs[ind] = compute_satllh(qzstles, times[ind]);
+        sbsllhs[ind] = compute_satllh(sbstles, times[ind]);
+      }
+
+      function run_compute_satazel(ind) {
+        gpsazels[ind] = compute_satazel(orgllh, gpsllhs[ind]);
+        gloazels[ind] = compute_satazel(orgllh, glollhs[ind]);
+        galazels[ind] = compute_satazel(orgllh, galllhs[ind]);
+        bdsazels[ind] = compute_satazel(orgllh, bdsllhs[ind]);
+        qzsazels[ind] = compute_satazel(orgllh, qzsllhs[ind]);
+        sbsazels[ind] = compute_satazel(orgllh, sbsllhs[ind]);
+      }
+
+      function run_gen_skyplotdata(ind) {
+        skyplts = {
+          gps: gen_skyplotdata(gpsazels[ind], 1),
+          glo: gen_skyplotdata(gloazels[ind], 1),
+          gal: gen_skyplotdata(galazels[ind], 1),
+          bds: gen_skyplotdata(bdsazels[ind], 1),
+          qzs: gen_skyplotdata(qzsazels[ind], 193),
+          sbs: gen_skyplotdata(sbsazels[ind], 120),
+        };
+      }
+
+      function run_gen_nsatplotdata() {
+        nsatplts = {
+          gps: gen_nsatplotdata(gpsazels),
+          glo: gen_nsatplotdata(gloazels),
+          gal: gen_nsatplotdata(galazels),
+          bds: gen_nsatplotdata(bdsazels),
+          qzs: gen_nsatplotdata(qzsazels),
+          sbs: gen_nsatplotdata(sbsazels),
+        };
+      }
+
+      function compute_satllh(tles, time) {
+        var llhs = new Array(tles.length);
+        for (var i = 0; i < tles.length; i++) {
+          if (tles[i]) {
+            llhs[i] = _compute_satllh(tles[i]['line1'], tles[i]['line2'], time);
+          }
+        }
+        return llhs;
+      }
+
+      function _compute_satllh(tle1, tle2, date) {
+        var satrec = satellite.twoline2satrec(tle1, tle2);
+        var y = date.getUTCFullYear();
+        var m = date.getUTCMonth() + 1;
+        var d = date.getUTCDate();
+        var hr = date.getUTCHours();
+        var min = date.getUTCMinutes();
+        var sec = date.getUTCSeconds();
+        var gmst = satellite.gstime_from_date(y, m, d, hr, min, sec);
+        var sateci = satellite.propagate(satrec, y, m, d, hr, min, sec);
+        return satellite.eci_to_geodetic(sateci['position'], gmst);
+      }
+
+      function compute_satazel(orgllh, llhs) {
+        var azels = new Array(llhs.length);
+        for (var i = 0; i < llhs.length; i++) {
+          if (llhs[i]) {
+            azels[i] = _compute_satazel(orgllh, llhs[i]);
+          }
+        }
+        return azels;
+      }
+
+      function _compute_satazel(orgllh, satllh) {
+        var satecf = satellite.geodetic_to_ecf(satllh);
+        var azel = satellite.ecf_to_look_angles(orgllh, satecf);
+        azel['azimuth'] = (azel['azimuth'] / Math.PI) * 180;
+        azel['elevation'] = (azel['elevation'] / Math.PI) * 180;
+        return azel;
+      }
+
+      function gen_skyplotdata(azels, offi) {
+        var plt = [];
+        for (var i = 0; i < azels.length; i++) {
+          if (azels[i]) {
+            if (azels[i]['elevation'] > elemask) {
+              var az = Math.round(azels[i]['azimuth'] * 10) / 10;
+              var el = Math.round(azels[i]['elevation'] * 10) / 10;
+              plt.push({ name: (i + offi).toString(), x: az, y: el });
             }
-            return tles;
+          }
+        }
+        return plt;
+      }
+
+      function gen_nsatplotdata(azels) {
+        var plt = [];
+        for (var j = 0; j < ntimes; j++) {
+          var nsat = 0;
+          for (var i = 0; i < azels[j].length; i++) {
+            if (azels[j][i]) {
+              if (azels[j][i]['elevation'] > elemask) {
+                nsat++;
+              }
+            }
+          }
+          plt.push({ x: j, y: nsat });
+        }
+        return plt;
+      }
+
+      function check_azel(azels, azs, els) {
+        return check_azel_mod(azels, azs, els, elemask);
+      }
+
+      // Sylvester DOP Math (Protected against division by zero and near-singularity)
+      function compute_dop(ind) {
+        var azs = [];
+        var els = [];
+        var tmp;
+
+        if (visstate['GPS']) {
+          tmp = check_azel(gpsazels[ind], azs, els);
+          azs = tmp[0];
+          els = tmp[1];
+        }
+        if (visstate['GLONASS']) {
+          tmp = check_azel(gloazels[ind], azs, els);
+          azs = tmp[0];
+          els = tmp[1];
+        }
+        if (visstate['Galileo']) {
+          tmp = check_azel(galazels[ind], azs, els);
+          azs = tmp[0];
+          els = tmp[1];
+        }
+        if (visstate['BeiDou']) {
+          tmp = check_azel(bdsazels[ind], azs, els);
+          azs = tmp[0];
+          els = tmp[1];
+        }
+        if (visstate['QZSS']) {
+          tmp = check_azel(qzsazels[ind], azs, els);
+          azs = tmp[0];
+          els = tmp[1];
+        }
+        if (visstate['SBAS']) {
+          tmp = check_azel(sbsazels[ind], azs, els);
+          azs = tmp[0];
+          els = tmp[1];
         }
 
-        // Map Satellites based on satlist.txt indices
-        function setupSatelliteData() {
-            var tles = parse_tle(tledl);
-            var sats = satlistdl.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-            var nsats = sats.length;
-            
-            gpstles.fill(undefined);
-            glotles.fill(undefined);
-            galtles.fill(undefined);
-            bdstles.fill(undefined);
-            qzstles.fill(undefined);
-            sbstles.fill(undefined);
-            
-            for (var i = 0; i < nsats; i++) {
-                var fields = sats[i].split(",");
-                if (fields.length < 3) continue;
-                var satId = fields[2].trim();
-                
-                if (satId in tles) {
-                    var sptle = tles[satId].split(",");
-                    var name = sptle[0];
-                    var line1 = sptle[1];
-                    var line2 = sptle[2];
-                    
-                    var type = fields[0];
-                    var index = Number(fields[1]);
-                    
-                    switch (type) {
-                        case "1": 
-                            gpstles[index - 1] = { "name": name, "line1": line1, "line2": line2 };
-                            break;
-                        case "2": 
-                            sbstles[index - 120] = { "name": name, "line1": line1, "line2": line2 };
-                            break;
-                        case "3": 
-                            glotles[index - 1] = { "name": name, "line1": line1, "line2": line2 };
-                            break;
-                        case "4": 
-                            galtles[index - 1] = { "name": name, "line1": line1, "line2": line2 };
-                            break;
-                        case "5": 
-                            qzstles[index - 193] = { "name": name, "line1": line1, "line2": line2 };
-                            break;
-                        case "6": 
-                            bdstles[index - 1] = { "name": name, "line1": line1, "line2": line2 };
-                            break;
-                    }
-                }
-            }
+        return compute_dop_mod(azs, els, Matrix);
+      }
+
+      // Draw modern Dual-Axis Stacked Column & Spline line chart
+      function nsatchartdraw(nsatplts, times, llh, elemask) {
+        var col = [
+          'rgba(255, 170, 0, 0.7)', // GPS
+          'rgba(255, 51, 102, 0.7)', // GLO
+          'rgba(0, 240, 255, 0.7)', // GAL
+          'rgba(0, 255, 102, 0.7)', // BDS
+          'rgba(255, 102, 0, 0.7)', // QZS
+          'rgba(160, 32, 240, 0.7)', // SBS
+        ];
+
+        var cat = [];
+        for (var i = 0; i < ntimes; i++) {
+          cat[i] = Highcharts.dateFormat('%H:%M', times[i] - utcoffset * 60 * 1000);
         }
 
-        // Initialize Leaflet 2D Map
-        function initLeafletMap() {
-            map = L.map('map', {
-                center: [orglat, orglon],
-                zoom: 3,
-                zoomControl: false,
-                attributionControl: true
-            });
+        var plotdata = {
+          chart: {
+            type: 'column',
+            renderTo: 'nsatchart',
+            backgroundColor: '#0d1322',
+            style: { fontFamily: 'Outfit' },
+          },
+          credits: { enabled: false },
+          title: {
+            text: 'CONSTELLATION DENSITY & GEOMETRY',
+            align: 'left',
+            style: {
+              color: '#ffffff',
+              fontFamily: 'Orbitron',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              letterSpacing: '1px',
+            },
+          },
+          xAxis: {
+            gridLineWidth: 0,
+            categories: cat,
+            lineColor: 'rgba(255,255,255,0.08)',
+            tickColor: 'rgba(255,255,255,0.08)',
+            labels: {
+              style: { color: 'rgba(255,255,255,0.4)', fontSize: '9px', fontFamily: 'Orbitron' },
+            },
+          },
+          yAxis: [
+            {
+              // Left Y axis (Satellite counts)
+              gridLineColor: 'rgba(255,255,255,0.04)',
+              min: 0,
+              title: {
+                text: 'SATELLITES TRACKED',
+                style: { color: 'rgba(255,255,255,0.5)', fontSize: '9px', fontWeight: 'bold' },
+              },
+              labels: { style: { color: 'rgba(255,255,255,0.4)' } },
+            },
+            {
+              // Right Y axis (PDOP Spline line)
+              gridLineWidth: 0,
+              min: 0,
+              max: 15,
+              opposite: true,
+              title: {
+                text: 'PDOP INDEX',
+                style: { color: '#00f0ff', fontSize: '9px', fontWeight: 'bold' },
+              },
+              labels: { style: { color: '#00f0ff' } },
+            },
+          ],
+          legend: { enabled: false },
+          tooltip: {
+            shared: true,
+            backgroundColor: '#0f1524',
+            borderWidth: 1,
+            borderColor: 'rgba(0, 240, 255, 0.25)',
+            style: { color: '#c5d1e6' },
+          },
+          exporting: { enabled: false },
+          plotOptions: {
+            column: {
+              stacking: 'normal',
+              borderWidth: 0,
+              borderRadius: 2,
+              point: {
+                events: {
+                  click: function () {
+                    onTimeIndexChanged(this.x);
+                  },
+                },
+              },
+            },
+          },
+          series: [
+            {
+              name: 'GPS',
+              color: col[0],
+              yAxis: 0,
+              data: nsatplts['gps'],
+            },
+            {
+              name: 'GLONASS',
+              color: col[1],
+              yAxis: 0,
+              data: nsatplts['glo'],
+            },
+            {
+              name: 'Galileo',
+              color: col[2],
+              yAxis: 0,
+              data: nsatplts['gal'],
+            },
+            {
+              name: 'BeiDou',
+              color: col[3],
+              yAxis: 0,
+              data: nsatplts['bds'],
+            },
+            {
+              name: 'QZSS',
+              color: col[4],
+              yAxis: 0,
+              data: nsatplts['qzs'],
+            },
+            {
+              name: 'SBAS',
+              color: col[5],
+              yAxis: 0,
+              data: nsatplts['sbs'],
+            },
+            {
+              name: 'PDOP',
+              type: 'spline',
+              color: '#00f0ff',
+              yAxis: 1,
+              dashStyle: 'ShortDash',
+              marker: { enabled: false },
+              data: pdopsPlotted,
+              tooltip: {
+                valueSuffix: '',
+              },
+            },
+          ],
+        };
 
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
+        nsatchart = new Highcharts.Chart(plotdata);
+        highlightActiveBarInChart(tind);
+      }
 
-            // Glowing CartoDB Dark Matter Tiles
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 20
-            }).addTo(map);
-            
-            // Add Day/Night Terminator
-            if (typeof L.terminator !== 'undefined') {
-                terminator = L.terminator().addTo(map);
+      // Get polar coordinate trajectory for selected satellite
+      function getSatellitePolarTrack(sysStr, index) {
+        var azelsArray;
+        switch (sysStr.toLowerCase()) {
+          case 'gps':
+            azelsArray = gpsazels;
+            break;
+          case 'glo':
+            azelsArray = gloazels;
+            break;
+          case 'gal':
+            azelsArray = galazels;
+            break;
+          case 'bds':
+            azelsArray = bdsazels;
+            break;
+          case 'qzs':
+            azelsArray = qzsazels;
+            break;
+          case 'sbs':
+            azelsArray = sbsazels;
+            break;
+        }
+        if (!azelsArray) return [];
+
+        var track = [];
+        for (var i = 0; i < ntimes; i++) {
+          if (azelsArray[i] && azelsArray[i][index]) {
+            var az = azelsArray[i][index]['azimuth'];
+            var el = azelsArray[i][index]['elevation'];
+
+            // Highcharts polar charts plot [azimuth (X, 0-360), elevation (Y, 0-90)]
+            if (el > 0) {
+              track.push({ x: Math.round(az * 10) / 10, y: Math.round(el * 10) / 10 });
             }
+          }
+        }
+        return track;
+      }
 
-            // Vector observer marker
-            var obsIcon = L.divIcon({
-                className: 'observer-marker-icon',
-                html: '<div class="observer-marker-dot"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            });
+      // Draw glowing tactical Radar screen polar chart
+      function skychartdraw(skyplts) {
+        var labels = {
+          0: 'N',
+          45: 'NE',
+          90: 'E',
+          135: 'SE',
+          180: 'S',
+          225: 'SW',
+          270: 'W',
+          315: 'NW',
+        };
 
-            mapMarker = L.marker([orglat, orglon], {
-                draggable: true,
-                icon: obsIcon
-            }).addTo(map);
+        var plotdata = {
+          chart: {
+            renderTo: 'skychart',
+            polar: true,
+            backgroundColor: '#0d1322',
+            style: { fontFamily: 'Outfit' },
+          },
+          credits: { enabled: false },
+          legend: {
+            align: 'right',
+            verticalAlign: 'middle',
+            layout: 'vertical',
+            itemStyle: {
+              color: 'rgba(255,255,255,0.7)',
+              fontSize: '9px',
+              fontFamily: 'Orbitron',
+            },
+            itemHoverStyle: { color: '#00f0ff' },
+          },
+          title: {
+            text: 'TACTICAL RADAR SKYPLOT',
+            align: 'left',
+            style: {
+              color: '#ffffff',
+              fontFamily: 'Orbitron',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              letterSpacing: '1px',
+            },
+          },
+          tooltip: {
+            backgroundColor: '#0f1524',
+            borderWidth: 1,
+            borderColor: 'rgba(0, 240, 255, 0.25)',
+            pointFormat:
+              'PRN: <b>{point.name}</b><br>EL: <b>{point.y}</b>°<br>AZ: <b>{point.x}</b>°',
+            style: { color: '#c5d1e6' },
+          },
+          pane: {
+            startAngle: 0,
+            endAngle: 360,
+            background: {
+              backgroundColor: '#050912',
+              borderWidth: 1,
+              borderColor: 'rgba(0, 240, 255, 0.15)',
+              shape: 'circle',
+            },
+          },
+          xAxis: {
+            tickInterval: 45,
+            min: 0,
+            max: 360,
+            lineColor: 'rgba(0, 240, 255, 0.15)',
+            gridLineColor: 'rgba(0, 240, 255, 0.08)',
+            labels: {
+              formatter: function () {
+                return labels[this.value];
+              },
+              style: {
+                color: 'rgba(255, 255, 255, 0.6)',
+                fontFamily: 'Orbitron',
+                fontSize: '10px',
+              },
+            },
+          },
+          yAxis: {
+            min: 0,
+            max: 90,
+            minorTickInterval: 10,
+            tickInterval: 30,
+            reversed: true,
+            gridLineColor: 'rgba(0, 240, 255, 0.08)',
+            labels: { enabled: false },
+          },
+          exporting: { enabled: false },
+          plotOptions: {
+            bubble: {
+              minSize: 18,
+              maxSize: 18,
+              dataLabels: {
+                enabled: true,
+                formatter: function () {
+                  return this.point.name;
+                },
+                y: 3,
+                style: {
+                  fontWeight: 'bold',
+                  fontSize: '9px',
+                  color: '#ffffff',
+                  textOutline: 'none',
+                },
+              },
+              events: {
+                show: function () {
+                  var name = this.name.split('(');
+                  var key =
+                    name[0] === 'GLONASS'
+                      ? 'GLONASS'
+                      : name[0] === 'BeiDou'
+                        ? 'BeiDou'
+                        : name[0] === 'QZSS'
+                          ? 'QZSS'
+                          : name[0] === 'SBAS'
+                            ? 'SBAS'
+                            : name[0];
+                  visstate[key] = true;
+                  dop = compute_dop(tind);
+                  updateDOPDisplay();
+                  updateLeafletMarkers(tind);
+                  drawGlobe();
+                  if (nsatchart) nsatchart.series[this.index].show();
+                },
+                hide: function () {
+                  var name = this.name.split('(');
+                  var key =
+                    name[0] === 'GLONASS'
+                      ? 'GLONASS'
+                      : name[0] === 'BeiDou'
+                        ? 'BeiDou'
+                        : name[0] === 'QZSS'
+                          ? 'QZSS'
+                          : name[0] === 'SBAS'
+                            ? 'SBAS'
+                            : name[0];
+                  visstate[key] = false;
+                  dop = compute_dop(tind);
+                  updateDOPDisplay();
+                  updateLeafletMarkers(tind);
+                  drawGlobe();
+                  if (nsatchart) nsatchart.series[this.index].hide();
+                },
+              },
+              point: {
+                events: {
+                  click: function () {
+                    var sysKeys = ['gps', 'glo', 'gal', 'bds', 'qzs', 'sbs'];
+                    var sysKey = sysKeys[this.series.index];
+                    var prnOffset = 1;
+                    if (sysKey === 'qzs') prnOffset = 193;
+                    if (sysKey === 'sbs') prnOffset = 120;
+                    var prnIndex = Number(this.name) - prnOffset;
 
-            mapMarker.on('dragend', function (ev) {
-                var pos = mapMarker.getLatLng();
-                orglat = pos.lat;
-                orglon = pos.lng;
-                
-                document.getElementById('lat-input').value = orglat.toFixed(4);
-                document.getElementById('lon-input').value = orglon.toFixed(4);
-                
-                onObserverChanged();
-            });
+                    selectedSatSys = sysKey;
+                    selectedSatIndex = prnIndex;
+                    drawSatelliteTrack(sysKey, prnIndex);
+                    drawGlobe();
+
+                    // Refresh skyplot to show the active track polyline
+                    skychartdraw(skyplts);
+                  },
+                },
+              },
+            },
+          },
+          series: [
+            {
+              type: 'bubble',
+              color: systemColors['gps'],
+              data: skyplts['gps'],
+              name: 'GPS(' + skyplts['gps'].length + ')',
+              visible: visstate['GPS'],
+            },
+            {
+              type: 'bubble',
+              color: systemColors['glo'],
+              data: skyplts['glo'],
+              name: 'GLONASS(' + skyplts['glo'].length + ')',
+              visible: visstate['GLONASS'],
+            },
+            {
+              type: 'bubble',
+              color: systemColors['gal'],
+              data: skyplts['gal'],
+              name: 'Galileo(' + skyplts['gal'].length + ')',
+              visible: visstate['Galileo'],
+            },
+            {
+              type: 'bubble',
+              color: systemColors['bds'],
+              data: skyplts['bds'],
+              name: 'BeiDou(' + skyplts['bds'].length + ')',
+              visible: visstate['BeiDou'],
+            },
+            {
+              type: 'bubble',
+              color: systemColors['qzs'],
+              data: skyplts['qzs'],
+              name: 'QZSS(' + skyplts['qzs'].length + ')',
+              visible: visstate['QZSS'],
+            },
+            {
+              type: 'bubble',
+              color: systemColors['sbs'],
+              data: skyplts['sbs'],
+              name: 'SBAS(' + skyplts['sbs'].length + ')',
+              visible: visstate['SBAS'],
+            },
+          ],
+        };
+
+        // Overlay the active satellite's path as a line series if selected
+        if (selectedSatSys && selectedSatIndex >= 0) {
+          var activeKey =
+            selectedSatSys.toUpperCase() === 'GLO'
+              ? 'GLONASS'
+              : selectedSatSys.toUpperCase() === 'BDS'
+                ? 'BeiDou'
+                : selectedSatSys.toUpperCase() === 'QZS'
+                  ? 'QZSS'
+                  : selectedSatSys.toUpperCase() === 'SBS'
+                    ? 'SBAS'
+                    : selectedSatSys.toUpperCase();
+
+          // Only draw track if the parent constellation is visible
+          if (visstate[activeKey]) {
+            var trackData = getSatellitePolarTrack(selectedSatSys, selectedSatIndex);
+            if (trackData && trackData.length > 0) {
+              var trackColor = systemColors[selectedSatSys.toLowerCase()] || '#ffffff';
+              plotdata.series.push({
+                type: 'line',
+                name: 'Active Trajectory',
+                color: trackColor,
+                dashStyle: 'ShortDash',
+                lineWidth: 1.5,
+                showInLegend: false,
+                marker: { enabled: false },
+                data: trackData,
+              });
+            }
+          }
         }
 
-        // Observer Location Changed Handler
-        function onObserverChanged() {
-            orgllh = {
-                "latitude": orglat * D2R,
-                "longitude": orglon * D2R,
-                "height": 0
-            };
-            
-            // Recompute azimuth/elevations
-            for (var i = 0; i < ntimes; i++) {
-                run_compute_satazel(i);
-            }
-            
-            // Recompute all PDOP intervals
-            for (var i = 0; i < ntimes; i++) {
-                var d = compute_dop(i);
-                pdops[i] = d["pdop"];
-                pdopsPlotted[i] = Math.min(25, d["pdop"]);
-            }
-            dop = compute_dop(tind);
+        skychart = new Highcharts.Chart(plotdata);
+      }
 
-            run_gen_skyplotdata(tind);
-            run_gen_nsatplotdata();
-            
-            // Refresh visualizations
-            drawGlobe();
-            skychartdraw(skyplts);
-            nsatchartdraw(nsatplts, times, orgllh, elemask);
-            updateDOPDisplay();
-            
-            // Redraw ground track if a satellite is selected
-            if (selectedSatSys && selectedSatIndex >= 0) {
-                drawSatelliteTrack(selectedSatSys, selectedSatIndex);
-            }
-        }
+      // ==========================================
+      // Interactive 3D Orbit Globe (Canvas Model)
+      // ==========================================
+      var canvas3D = null;
+      var ctx3D = null;
+      var globeScale = 100; // Pixels per Earth radius (6378.1 km)
+      var yaw = 0;
+      var pitch = 0.5;
+      var isDraggingGlobe = false;
+      var startMouseX, startMouseY;
+      var startYaw, startPitch;
 
-        // Apply controls inputs clicked
-        function setupUIHandlers() {
-            document.getElementById('btn-recalculate').addEventListener('click', () => {
-                orglat = Number(document.getElementById('lat-input').value);
-                orglon = Number(document.getElementById('lon-input').value);
-                elemask = Number(document.getElementById('mask-input').value);
-                offhr = Number(document.getElementById('offset-input').value);
-                tint = Number(document.getElementById('interval-input').value);
-                tintMs = tint * 60 * 1000;
-                ntimes = Number(document.getElementById('steps-input').value);
-                if (ntimes > maxntimes) ntimes = maxntimes;
+      function init3DGlobe() {
+        canvas3D = document.getElementById('globe-canvas');
+        ctx3D = canvas3D.getContext('2d');
 
-                mapMarker.setLatLng([orglat, orglon]);
-                map.panTo([orglat, orglon]);
-                
-                onObserverChanged();
-            });
+        resizeGlobeCanvas();
+        window.addEventListener('resize', resizeGlobeCanvas);
 
-            // 2D/3D Toggles
-            var btn2D = document.getElementById('btn-toggle-2d');
-            var btn3D = document.getElementById('btn-toggle-3d');
-            var panel2D = document.getElementById('map');
-            var panel3D = document.getElementById('globe-container');
+        // Drag handler
+        canvas3D.addEventListener('mousedown', function (e) {
+          isDraggingGlobe = true;
+          startMouseX = e.clientX;
+          startMouseY = e.clientY;
+          startYaw = yaw;
+          startPitch = pitch;
+        });
 
-            btn2D.addEventListener('click', () => {
-                btn2D.classList.add('active');
-                btn3D.classList.remove('active');
-                panel2D.classList.add('active');
-                panel3D.classList.remove('active');
-                setTimeout(() => { map.invalidateSize(); }, 50);
-            });
+        window.addEventListener('mousemove', function (e) {
+          if (!isDraggingGlobe) return;
+          var dx = e.clientX - startMouseX;
+          var dy = e.clientY - startMouseY;
 
-            btn3D.addEventListener('click', () => {
-                btn3D.classList.add('active');
-                btn2D.classList.remove('active');
-                panel3D.classList.add('active');
-                panel2D.classList.remove('active');
-                resizeGlobeCanvas();
-            });
-        }
+          yaw = startYaw - dx * 0.007;
+          pitch = startPitch + dy * 0.007;
 
-        // Perform Main Computations
-        function runCalculation() {
-            const start = performance.now();
-            var timeInputVal = document.getElementById("start-time-input").value;
-            var time = timeInputVal ? new Date(timeInputVal) : new Date();
-            utcoffset = time.getTimezoneOffset();
-            time.setHours(time.getHours() + offhr); 
-            
-            for (var i = 0; i < ntimes; i++) {
-                times[i] = new Date(time.getTime());
-                time.setMinutes(time.getMinutes() + tintMs / 1000 / 60);
-            }
+          // Bound pitch to keep polar perspective readable
+          pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, pitch));
 
-            for (var i = 0; i < ntimes; i++) {
-                run_compute_satllh(i);
-                run_compute_satazel(i);
-            }
+          drawGlobe();
+        });
 
-            // Precalculate PDOP sequences
-            for (var i = 0; i < ntimes; i++) {
-                var d = compute_dop(i);
-                pdops[i] = d["pdop"];
-                pdopsPlotted[i] = Math.min(25, d["pdop"]);
-            }
-            dop = compute_dop(tind);
+        window.addEventListener('mouseup', function () {
+          isDraggingGlobe = false;
+        });
 
-            run_gen_skyplotdata(tind);
-            run_gen_nsatplotdata();
+        // Double click to align center directly on the observer
+        canvas3D.addEventListener('dblclick', function () {
+          yaw = -orglon * D2R;
+          pitch = orglat * D2R;
+          drawGlobe();
+        });
 
-            // Render
-            updateLeafletMarkers(tind);
-            drawGlobe();
-            
-            skychartdraw(skyplts);
-            nsatchartdraw(nsatplts, times, orgllh, elemask);
-            
-            updateDOPDisplay();
-            const end = performance.now();
-            Logger.info('PERF', `Full calculation cycle completed in ${(end - start).toFixed(2)}ms`);
-        }
+        // Align center directly on observer
+        yaw = -orglon * D2R;
+        pitch = orglat * D2R;
+      }
 
-        // Draw Ground Track of Satellite on 2D map
-        function drawSatelliteTrack(sysStr, index) {
-            if (activeTrackPolyline) {
-                map.removeLayer(activeTrackPolyline);
-                activeTrackPolyline = null;
-            }
+      function resizeGlobeCanvas() {
+        if (!canvas3D) return;
+        var rect = canvas3D.parentElement.getBoundingClientRect();
+        canvas3D.width = rect.width;
+        canvas3D.height = rect.height;
+        drawGlobe();
+      }
 
-            var llhArray;
-            switch(sysStr.toLowerCase()) {
-                case 'gps': llhArray = gpsllhs; break;
-                case 'glo': llhArray = glollhs; break;
-                case 'gal': llhArray = galllhs; break;
-                case 'bds': llhArray = bdsllhs; break;
-                case 'qzs': llhArray = qzsllhs; break;
-                case 'sbs': llhArray = sbsllhs; break;
-            }
+      function rotate3D(x, y, z, pitch, yaw) {
+        return rotate3D_mod(x, y, z, pitch, yaw);
+      }
 
-            if (!llhArray) return;
+      function getObserverEcef() {
+        return getObserverEcef_mod(orgllh);
+      }
 
-            var latLons = [];
-            var color = systemColors[sysStr.toLowerCase()] || '#ffffff';
+      function drawGlobe() {
+        if (!canvas3D || !ctx3D) return;
 
-            for (var i = 0; i < ntimes; i++) {
-                if (llhArray[i] && llhArray[i][index]) {
-                    var lat = llhArray[i][index]["latitude"] * R2D;
-                    var lon = llhArray[i][index]["longitude"] * R2D;
-                    
-                    // Standard anti-wrapping boundaries
-                    if (lon > 180) lon -= 360;
-                    if (lon < -180) lon += 360;
-                    
-                    if (!isNaN(lat) && !isNaN(lon)) {
-                        latLons.push([lat, lon]);
-                    }
-                }
-            }
+        var width = canvas3D.width;
+        var height = canvas3D.height;
+        var cx = width / 2;
+        var cy = height / 2;
 
-            if (latLons.length > 0) {
-                activeTrackPolyline = L.polyline(latLons, {
-                    color: color,
-                    weight: 2.5,
-                    opacity: 0.8,
-                    dashArray: '6, 6'
-                }).addTo(map);
-            }
-        }
+        ctx3D.clearRect(0, 0, width, height);
 
-        // Update Map satellite positions
-        function updateLeafletMarkers(ind) {
-            if (terminator && times[ind]) {
-                terminator.setTime(times[ind]);
-            }
-            updateConstellationMarkers(gpsllhs[ind], gpstles, "gps");
-            updateConstellationMarkers(glollhs[ind], glotles, "glo");
-            updateConstellationMarkers(galllhs[ind], galtles, "gal");
-            updateConstellationMarkers(bdsllhs[ind], bdstles, "bds");
-            updateConstellationMarkers(qzsllhs[ind], qzstles, "qzs", 193);
-            updateConstellationMarkers(sbsllhs[ind], sbstles, "sbs", 120);
-        }
+        // 3D canvas solid background
+        ctx3D.fillStyle = '#050810';
+        ctx3D.fillRect(0, 0, width, height);
 
-        function updateConstellationMarkers(llhs, tles, sysKey, prnOffset = 1) {
-            if (!llhs) return;
-            var color = systemColors[sysKey];
-            var uppercaseSys = sysKey === 'glo' ? 'GLONASS' : (sysKey === 'bds' ? 'BeiDou' : (sysKey === 'qzs' ? 'QZSS' : (sysKey === 'sbs' ? 'SBAS' : sysKey.toUpperCase())));
+        var R = globeScale;
+        var scale = R / 6378.1; // scale: px/km
 
-            for (var i = 0; i < tles.length; i++) {
-                if (tles[i] && llhs[i]) {
-                    var lat = llhs[i]["latitude"] * R2D;
-                    var lon = llhs[i]["longitude"] * R2D;
-                    if (lon > 180) lon -= 360;
-                    if (lon < -180) lon += 360;
+        // Shaded Earth sphere
+        var grad = ctx3D.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.1, cx, cy, R);
+        grad.addColorStop(0, '#16223b');
+        grad.addColorStop(0.7, '#0d1525');
+        grad.addColorStop(1, '#05080f');
 
-                    var key = sysKey + "_" + i;
-                    var visible = visstate[uppercaseSys];
+        ctx3D.fillStyle = grad;
+        ctx3D.beginPath();
+        ctx3D.arc(cx, cy, R, 0, 2 * Math.PI);
+        ctx3D.fill();
 
-                    if (visible && !isNaN(lat) && !isNaN(lon)) {
-                        var tooltip = `<b>${tles[i]["name"]}</b><br>System: ${uppercaseSys}<br>PRN: ${i + prnOffset}<br>Lat: ${lat.toFixed(3)}°<br>Lon: ${lon.toFixed(3)}°`;
-                        
-                        if (!satMarkers[key]) {
-                            var icon = L.divIcon({
-                                className: `sat-marker-container sat-${sysKey}`,
-                                html: `<div class="sat-marker-dot" style="background-color: ${color}; box-shadow: 0 0 8px ${color}"></div>`,
-                                iconSize: [12, 12],
-                                iconAnchor: [6, 6]
-                            });
+        // Earth grid lines
+        ctx3D.lineWidth = 0.5;
 
-                            // Custom Leaflet hover events
-                            satMarkers[key] = L.marker([lat, lon], { icon: icon })
-                                .addTo(map)
-                                .bindTooltip(tooltip, { direction: 'top', permanent: false });
-                                
-                            // Click listener
-                            satMarkers[key].on('click', ((s, idx) => {
-                                return () => {
-                                    selectedSatSys = s;
-                                    selectedSatIndex = idx;
-                                    drawSatelliteTrack(s, idx);
-                                    drawGlobe();
-                                };
-                            })(sysKey, i));
-                        } else {
-                            satMarkers[key].setLatLng([lat, lon]);
-                            satMarkers[key].setTooltipContent(tooltip);
-                            if (!map.hasLayer(satMarkers[key])) {
-                                satMarkers[key].addTo(map);
-                            }
-                        }
-                    } else {
-                        if (satMarkers[key] && map.hasLayer(satMarkers[key])) {
-                            map.removeLayer(satMarkers[key]);
-                        }
-                    }
-                }
-            }
-        }
+        // Latitudes (Parallels)
+        for (var latDeg = -60; latDeg <= 60; latDeg += 30) {
+          var latRad = latDeg * D2R;
+          var cosLat = Math.cos(latRad);
+          var sinLat = Math.sin(latRad);
 
-        // Live telemetry updater
-        function updateDOPDisplay() {
-            var active = getActiveSatCount(tind);
-            document.getElementById('val-pdop').innerText = dop["pdop"] > 99 ? '99.9+' : dop["pdop"].toFixed(2);
-            document.getElementById('val-hdop').innerText = dop["hdop"] > 99 ? '99.9+' : dop["hdop"].toFixed(2);
-            document.getElementById('val-vdop').innerText = dop["vdop"] > 99 ? '99.9+' : dop["vdop"].toFixed(2);
-            document.getElementById('val-nsat').innerText = active;
+          ctx3D.beginPath();
+          var first = true;
 
-            // Highlight poor geometry alerts
-            var pdopVal = dop["pdop"];
-            var pdopElem = document.getElementById('val-pdop');
-            if (pdopVal > 6) {
-                pdopElem.style.color = '#ff3366';
-            } else if (pdopVal > 3.5) {
-                pdopElem.style.color = '#ffaa00';
+          for (var lonDeg = 0; lonDeg <= 360; lonDeg += 10) {
+            var lonRad = lonDeg * D2R;
+            var x = 6378.1 * cosLat * Math.cos(lonRad);
+            var y = 6378.1 * cosLat * Math.sin(lonRad);
+            var z = 6378.1 * sinLat;
+
+            var pt = rotate3D(x, y, z, pitch, yaw);
+            var px = cx + pt.x * scale;
+            var py = cy - pt.y * scale;
+
+            if (pt.z > 0) {
+              if (first) {
+                ctx3D.moveTo(px, py);
+                first = false;
+              } else {
+                ctx3D.lineTo(px, py);
+              }
             } else {
-                pdopElem.style.color = '#00f0ff';
+              first = true;
             }
+          }
+          ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.08)';
+          ctx3D.stroke();
         }
 
-        function getActiveSatCount(ind) {
-            var total = 0;
-            var sysKeys = ['gps', 'glo', 'gal', 'bds', 'qzs', 'sbs'];
-            var dataLists = [gpsazels[ind], gloazels[ind], galazels[ind], bdsazels[ind], qzsazels[ind], sbsazels[ind]];
-            var activeKeys = ['GPS', 'GLONASS', 'Galileo', 'BeiDou', 'QZSS', 'SBAS'];
+        // Longitudes (Meridians)
+        for (var lonDeg = 0; lonDeg < 360; lonDeg += 30) {
+          var lonRad = lonDeg * D2R;
+          var cosLon = Math.cos(lonRad);
+          var sinLon = Math.sin(lonRad);
 
-            for (var k = 0; k < sysKeys.length; k++) {
-                if (!visstate[activeKeys[k]]) continue;
-                var list = dataLists[k];
-                if (list) {
-                    for (var i = 0; i < list.length; i++) {
-                        if (list[i] && list[i]["elevation"] > elemask) {
-                            total++;
-                        }
-                    }
-                }
+          ctx3D.beginPath();
+          var first = true;
+          for (var latDeg = -90; latDeg <= 90; latDeg += 5) {
+            var latRad = latDeg * D2R;
+            var x = 6378.1 * Math.cos(latRad) * cosLon;
+            var y = 6378.1 * Math.cos(latRad) * sinLon;
+            var z = 6378.1 * Math.sin(latRad);
+
+            var pt = rotate3D(x, y, z, pitch, yaw);
+            var px = cx + pt.x * scale;
+            var py = cy - pt.y * scale;
+
+            if (pt.z > 0) {
+              if (first) {
+                ctx3D.moveTo(px, py);
+                first = false;
+              } else {
+                ctx3D.lineTo(px, py);
+              }
+            } else {
+              first = true;
             }
-            return total;
+          }
+          ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.08)';
+          ctx3D.stroke();
         }
 
-        // Time navigation index changed
-        function onTimeIndexChanged(newInd) {
-            tind = newInd;
-            
-            // Map markers updates
-            updateLeafletMarkers(tind);
-            if (selectedSatSys && selectedSatIndex >= 0) {
-                drawSatelliteTrack(selectedSatSys, selectedSatIndex);
-            }
+        // Atmospheric ring glow
+        ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.2)';
+        ctx3D.lineWidth = 1.5;
+        ctx3D.beginPath();
+        ctx3D.arc(cx, cy, R, 0, 2 * Math.PI);
+        ctx3D.stroke();
 
-            // Radar skyplot updates
-            run_gen_skyplotdata(tind);
-            skychartdraw(skyplts);
-            
-            // DOP math recalculation
-            dop = compute_dop(tind);
-            updateDOPDisplay();
-            drawGlobe();
+        // Draw Observer
+        var obsEcef = getObserverEcef();
+        var obsPt = rotate3D(obsEcef.x, obsEcef.y, obsEcef.z, pitch, yaw);
+        var obsPx = cx + obsPt.x * scale;
+        var obsPy = cy - obsPt.y * scale;
 
-            // Refresh xAxis highcharts highlights
-            highlightActiveBarInChart(tind);
+        var isObsVisible = obsPt.z > 0;
+        if (isObsVisible) {
+          ctx3D.fillStyle = '#00f0ff';
+          ctx3D.beginPath();
+          ctx3D.arc(obsPx, obsPy, 4.5, 0, 2 * Math.PI);
+          ctx3D.fill();
+
+          ctx3D.strokeStyle = '#ffffff';
+          ctx3D.lineWidth = 1;
+          ctx3D.stroke();
+
+          ctx3D.fillStyle = '#ffffff';
+          ctx3D.font = 'bold 9px Orbitron';
+          ctx3D.fillText('OBS', obsPx + 7, obsPy + 3);
         }
 
-        function highlightActiveBarInChart(index) {
-            if (!nsatchart) return;
-            nsatchart.xAxis[0].removePlotBand('active-time-band');
-            nsatchart.xAxis[0].addPlotBand({
-                id: 'active-time-band',
-                from: index - 0.45,
-                to: index + 0.45,
-                color: 'rgba(0, 240, 255, 0.08)',
-                borderColor: 'rgba(0, 240, 255, 0.4)',
-                borderWidth: 1,
-                zIndex: 5
-            });
-        }
+        // Draw Orbits and Satellites
+        drawGlobeSatellites(cx, cy, scale, obsEcef, obsPx, obsPy, isObsVisible);
+      }
 
-        // TLE Propagation math callers
-        function run_compute_satllh(ind) {
-            gpsllhs[ind] = compute_satllh(gpstles, times[ind]);
-            glollhs[ind] = compute_satllh(glotles, times[ind]);
-            galllhs[ind] = compute_satllh(galtles, times[ind]);
-            bdsllhs[ind] = compute_satllh(bdstles, times[ind]);
-            qzsllhs[ind] = compute_satllh(qzstles, times[ind]);
-            sbsllhs[ind] = compute_satllh(sbstles, times[ind]);
-        }
+      function drawGlobeSatellites(cx, cy, scale, obsEcef, obsPx, obsPy, isObsVisible) {
+        var constellations = {
+          gps: { llh: gpsllhs[tind], tles: gpstles, prefix: 'G', offset: 1 },
+          glo: { llh: glollhs[tind], tles: glotles, prefix: 'R', offset: 1 },
+          gal: { llh: galllhs[tind], tles: galtles, prefix: 'E', offset: 1 },
+          bds: { llh: bdsllhs[tind], tles: bdstles, prefix: 'C', offset: 1 },
+          qzs: { llh: qzsllhs[tind], tles: qzstles, prefix: 'J', offset: 193 },
+          sbs: { llh: sbsllhs[tind], tles: sbstles, prefix: 'S', offset: 120 },
+        };
 
-        function run_compute_satazel(ind) {
-            gpsazels[ind] = compute_satazel(orgllh, gpsllhs[ind]);
-            gloazels[ind] = compute_satazel(orgllh, glollhs[ind]);
-            galazels[ind] = compute_satazel(orgllh, galllhs[ind]);
-            bdsazels[ind] = compute_satazel(orgllh, bdsllhs[ind]);
-            qzsazels[ind] = compute_satazel(orgllh, qzsllhs[ind]);
-            sbsazels[ind] = compute_satazel(orgllh, sbsllhs[ind]);
-        }
+        // Draw Lines of Sight paths
+        ctx3D.lineWidth = 0.5;
+        for (var sys in constellations) {
+          if (
+            !visstate[
+              sys === 'glo'
+                ? 'GLONASS'
+                : sys === 'bds'
+                  ? 'BeiDou'
+                  : sys === 'qzs'
+                    ? 'QZSS'
+                    : sys === 'sbs'
+                      ? 'SBAS'
+                      : sys.toUpperCase()
+            ]
+          )
+            continue;
+          var data = constellations[sys];
+          var llh = data.llh;
+          if (!llh) continue;
+          var azelArray = null;
+          switch (sys) {
+            case 'gps':
+              azelArray = gpsazels[tind];
+              break;
+            case 'glo':
+              azelArray = gloazels[tind];
+              break;
+            case 'gal':
+              azelArray = galazels[tind];
+              break;
+            case 'bds':
+              azelArray = bdsazels[tind];
+              break;
+            case 'qzs':
+              azelArray = qzsazels[tind];
+              break;
+            case 'sbs':
+              azelArray = sbsazels[tind];
+              break;
+          }
 
-        function run_gen_skyplotdata(ind) {
-            skyplts = {
-                gps: gen_skyplotdata(gpsazels[ind], 1),
-                glo: gen_skyplotdata(gloazels[ind], 1),
-                gal: gen_skyplotdata(galazels[ind], 1),
-                bds: gen_skyplotdata(bdsazels[ind], 1),
-                qzs: gen_skyplotdata(qzsazels[ind], 193),
-                sbs: gen_skyplotdata(sbsazels[ind], 120)
-            };
-        }
+          for (var i = 0; i < llh.length; i++) {
+            if (llh[i] && data.tles[i]) {
+              var azel = azelArray ? azelArray[i] : null;
+              if (azel && azel.elevation > elemask) {
+                var satEcef = satellite.geodetic_to_ecf(llh[i]);
+                var satPt = rotate3D(satEcef.x, satEcef.y, satEcef.z, pitch, yaw);
+                var satPx = cx + satPt.x * scale;
+                var satPy = cy - satPt.y * scale;
 
-        function run_gen_nsatplotdata() {
-            nsatplts = {
-                gps: gen_nsatplotdata(gpsazels),
-                glo: gen_nsatplotdata(gloazels),
-                gal: gen_nsatplotdata(galazels),
-                bds: gen_nsatplotdata(bdsazels),
-                qzs: gen_nsatplotdata(qzsazels),
-                sbs: gen_nsatplotdata(sbsazels)
-            };
-        }
-
-        function compute_satllh(tles, time) {
-            var llhs = new Array(tles.length);
-            for (var i = 0; i < tles.length; i++) {
-                if (tles[i]) {
-                    llhs[i] = _compute_satllh(tles[i]["line1"], tles[i]["line2"], time);
-                }
-            }
-            return llhs;
-        }
-
-        function _compute_satllh(tle1, tle2, date) {
-            var satrec = satellite.twoline2satrec(tle1, tle2);
-            var y = date.getUTCFullYear();
-            var m = date.getUTCMonth() + 1;
-            var d = date.getUTCDate();
-            var hr = date.getUTCHours();
-            var min = date.getUTCMinutes();
-            var sec = date.getUTCSeconds();
-            var gmst = satellite.gstime_from_date(y, m, d, hr, min, sec);
-            var sateci = satellite.propagate(satrec, y, m, d, hr, min, sec);
-            return satellite.eci_to_geodetic(sateci["position"], gmst);
-        }
-
-        function compute_satazel(orgllh, llhs) {
-            var azels = new Array(llhs.length);
-            for (var i = 0; i < llhs.length; i++) {
-                if (llhs[i]) {
-                    azels[i] = _compute_satazel(orgllh, llhs[i]);
-                }
-            }
-            return azels;
-        }
-
-        function _compute_satazel(orgllh, satllh) {
-            var satecf = satellite.geodetic_to_ecf(satllh);
-            var azel = satellite.ecf_to_look_angles(orgllh, satecf);
-            azel["azimuth"] = azel["azimuth"] / Math.PI * 180; 
-            azel["elevation"] = azel["elevation"] / Math.PI * 180; 
-            return azel;
-        }
-
-        function gen_skyplotdata(azels, offi) {
-            var plt = [];
-            for (var i = 0; i < azels.length; i++) {
-                if (azels[i]) {
-                    if (azels[i]["elevation"] > elemask) {
-                        var az = Math.round(azels[i]["azimuth"] * 10) / 10;
-                        var el = Math.round(azels[i]["elevation"] * 10) / 10;
-                        plt.push({ name: (i + offi).toString(), x: az, y: el });
-                    }
-                }
-            }
-            return plt;
-        }
-
-        function gen_nsatplotdata(azels) {
-            var plt = [];
-            for (var j = 0; j < ntimes; j++) {
-                var nsat = 0;
-                for (var i = 0; i < azels[j].length; i++) {
-                    if (azels[j][i]) {
-                        if (azels[j][i]["elevation"] > elemask) {
-                            nsat++;
-                        }
-                    }
-                }
-                plt.push({ x: j, y: nsat });
-            }
-            return plt;
-        }
-
-        function check_azel(azels, azs, els) {
-            for (var i = 0; i < azels.length; i++) {
-                if (azels[i]) {
-                    if (azels[i]["elevation"] > elemask) {
-                        azs[azs.length] = azels[i]["azimuth"] * D2R;
-                        els[els.length] = azels[i]["elevation"] * D2R;
-                    }
-                }
-            }
-            return [azs, els];
-        }
-
-        // Sylvester DOP Math (Protected against division by zero and near-singularity)
-        function compute_dop(ind) {
-            var azs = [];
-            var els = [];
-            var tmp;
-
-            if (visstate["GPS"]) {
-                tmp = check_azel(gpsazels[ind], azs, els); azs = tmp[0]; els = tmp[1];
-            }
-            if (visstate["GLONASS"]) {
-                tmp = check_azel(gloazels[ind], azs, els); azs = tmp[0]; els = tmp[1];
-            }
-            if (visstate["Galileo"]) {
-                tmp = check_azel(galazels[ind], azs, els); azs = tmp[0]; els = tmp[1];
-            }
-            if (visstate["BeiDou"]) {
-                tmp = check_azel(bdsazels[ind], azs, els); azs = tmp[0]; els = tmp[1];
-            }
-            if (visstate["QZSS"]) {
-                tmp = check_azel(qzsazels[ind], azs, els); azs = tmp[0]; els = tmp[1];
-            }
-            if (visstate["SBAS"]) {
-                tmp = check_azel(sbsazels[ind], azs, els); azs = tmp[0]; els = tmp[1];
-            }
-
-            var nsat = azs.length;
-            if (nsat < 4) return { "hdop": 99.9, "vdop": 99.9, "pdop": 99.9 };
-
-            var G = Matrix.Zero(nsat, 4);
-            for (var i = 0; i < nsat; i++) {
-                G.elements[i][0] = Math.cos(els[i]) * Math.sin(azs[i]); // East
-                G.elements[i][1] = Math.cos(els[i]) * Math.cos(azs[i]); // North
-                G.elements[i][2] = Math.sin(els[i]); // Up
-                G.elements[i][3] = 1;
-            }
-
-            // Robust validation checks
-            var Gt = G.transpose();
-            var GtG = Gt.multiply(G);
-            var D = GtG.inverse();
-            
-            var out = { "hdop": 99.9, "vdop": 99.9, "pdop": 99.9 };
-            if (D && D.elements) {
-                var hVal = D.elements[0][0] + D.elements[1][1];
-                var vVal = D.elements[2][2];
-                var pVal = D.elements[0][0] + D.elements[1][1] + D.elements[2][2];
-                
-                out["hdop"] = (hVal > 0 && hVal < 10000) ? Math.sqrt(hVal) : 99.9;
-                out["vdop"] = (vVal > 0 && vVal < 10000) ? Math.sqrt(vVal) : 99.9;
-                out["pdop"] = (pVal > 0 && pVal < 10000) ? Math.sqrt(pVal) : 99.9;
-            }
-            return out;
-        }
-
-        // Draw modern Dual-Axis Stacked Column & Spline line chart
-        function nsatchartdraw(nsatplts, times, llh, elemask) {
-            var col = [
-                'rgba(255, 170, 0, 0.7)',  // GPS
-                'rgba(255, 51, 102, 0.7)',  // GLO
-                'rgba(0, 240, 255, 0.7)',  // GAL
-                'rgba(0, 255, 102, 0.7)',  // BDS
-                'rgba(255, 102, 0, 0.7)',  // QZS
-                'rgba(160, 32, 240, 0.7)'   // SBS
-            ];
-            
-            var cat = [];
-            for (var i = 0; i < ntimes; i++) {
-                cat[i] = Highcharts.dateFormat('%H:%M', times[i] - utcoffset * 60 * 1000);
-            }
-
-            var plotdata = {
-                chart: {
-                    type: 'column',
-                    renderTo: 'nsatchart',
-                    backgroundColor: '#0d1322',
-                    style: { fontFamily: 'Outfit' }
-                },
-                credits: { enabled: false },
-                title: {
-                    text: 'CONSTELLATION DENSITY & GEOMETRY',
-                    align: 'left',
-                    style: {
-                        color: '#ffffff',
-                        fontFamily: 'Orbitron',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        letterSpacing: '1px'
-                    }
-                },
-                xAxis: {
-                    gridLineWidth: 0,
-                    categories: cat,
-                    lineColor: 'rgba(255,255,255,0.08)',
-                    tickColor: 'rgba(255,255,255,0.08)',
-                    labels: {
-                        style: { color: 'rgba(255,255,255,0.4)', fontSize: '9px', fontFamily: 'Orbitron' }
-                    }
-                },
-                yAxis: [{
-                    // Left Y axis (Satellite counts)
-                    gridLineColor: 'rgba(255,255,255,0.04)',
-                    min: 0,
-                    title: {
-                        text: 'SATELLITES TRACKED',
-                        style: { color: 'rgba(255,255,255,0.5)', fontSize: '9px', fontWeight: 'bold' }
-                    },
-                    labels: { style: { color: 'rgba(255,255,255,0.4)' } }
-                }, {
-                    // Right Y axis (PDOP Spline line)
-                    gridLineWidth: 0,
-                    min: 0,
-                    max: 15,
-                    opposite: true,
-                    title: {
-                        text: 'PDOP INDEX',
-                        style: { color: '#00f0ff', fontSize: '9px', fontWeight: 'bold' }
-                    },
-                    labels: { style: { color: '#00f0ff' } }
-                }],
-                legend: { enabled: false },
-                tooltip: {
-                    shared: true,
-                    backgroundColor: '#0f1524',
-                    borderWidth: 1,
-                    borderColor: 'rgba(0, 240, 255, 0.25)',
-                    style: { color: '#c5d1e6' }
-                },
-                exporting: { enabled: false },
-                plotOptions: {
-                    column: {
-                        stacking: 'normal',
-                        borderWidth: 0,
-                        borderRadius: 2,
-                        point: {
-                            events: {
-                                click: function () {
-                                    onTimeIndexChanged(this.x);
-                                }
-                            }
-                        }
-                    }
-                },
-                series: [{
-                    name: 'GPS',
-                    color: col[0],
-                    yAxis: 0,
-                    data: nsatplts["gps"]
-                }, {
-                    name: 'GLONASS',
-                    color: col[1],
-                    yAxis: 0,
-                    data: nsatplts["glo"]
-                }, {
-                    name: 'Galileo',
-                    color: col[2],
-                    yAxis: 0,
-                    data: nsatplts["gal"]
-                }, {
-                    name: 'BeiDou',
-                    color: col[3],
-                    yAxis: 0,
-                    data: nsatplts["bds"]
-                }, {
-                    name: 'QZSS',
-                    color: col[4],
-                    yAxis: 0,
-                    data: nsatplts["qzs"]
-                }, {
-                    name: 'SBAS',
-                    color: col[5],
-                    yAxis: 0,
-                    data: nsatplts["sbs"]
-                }, {
-                    name: 'PDOP',
-                    type: 'spline',
-                    color: '#00f0ff',
-                    yAxis: 1,
-                    dashStyle: 'ShortDash',
-                    marker: { enabled: false },
-                    data: pdopsPlotted,
-                    tooltip: {
-                        valueSuffix: ''
-                    }
-                }]
-            };
-
-            nsatchart = new Highcharts.Chart(plotdata);
-            highlightActiveBarInChart(tind);
-        }
-
-        // Get polar coordinate trajectory for selected satellite
-        function getSatellitePolarTrack(sysStr, index) {
-            var azelsArray;
-            switch(sysStr.toLowerCase()) {
-                case 'gps': azelsArray = gpsazels; break;
-                case 'glo': azelsArray = gloazels; break;
-                case 'gal': azelsArray = galazels; break;
-                case 'bds': azelsArray = bdsazels; break;
-                case 'qzs': azelsArray = qzsazels; break;
-                case 'sbs': azelsArray = sbsazels; break;
-            }
-            if (!azelsArray) return [];
-            
-            var track = [];
-            for (var i = 0; i < ntimes; i++) {
-                if (azelsArray[i] && azelsArray[i][index]) {
-                    var az = azelsArray[i][index]["azimuth"];
-                    var el = azelsArray[i][index]["elevation"];
-                    
-                    // Highcharts polar charts plot [azimuth (X, 0-360), elevation (Y, 0-90)]
-                    if (el > 0) {
-                        track.push({ x: Math.round(az * 10) / 10, y: Math.round(el * 10) / 10 });
-                    }
-                }
-            }
-            return track;
-        }
-
-        // Draw glowing tactical Radar screen polar chart
-        function skychartdraw(skyplts) {
-            var labels = {
-                "0": "N", "45": "NE", "90": "E", "135": "SE",
-                "180": "S", "225": "SW", "270": "W", "315": "NW"
-            };
-            
-            var plotdata = {
-                chart: {
-                    renderTo: "skychart",
-                    polar: true,
-                    backgroundColor: '#0d1322',
-                    style: { fontFamily: 'Outfit' }
-                },
-                credits: { enabled: false },
-                legend: {
-                    align: 'right',
-                    verticalAlign: 'middle',
-                    layout: 'vertical',
-                    itemStyle: {
-                        color: 'rgba(255,255,255,0.7)',
-                        fontSize: '9px',
-                        fontFamily: 'Orbitron'
-                    },
-                    itemHoverStyle: { color: '#00f0ff' }
-                },
-                title: {
-                    text: 'TACTICAL RADAR SKYPLOT',
-                    align: 'left',
-                    style: {
-                        color: '#ffffff',
-                        fontFamily: 'Orbitron',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        letterSpacing: '1px'
-                    }
-                },
-                tooltip: {
-                    backgroundColor: '#0f1524',
-                    borderWidth: 1,
-                    borderColor: 'rgba(0, 240, 255, 0.25)',
-                    pointFormat: 'PRN: <b>{point.name}</b><br>EL: <b>{point.y}</b>°<br>AZ: <b>{point.x}</b>°',
-                    style: { color: '#c5d1e6' }
-                },
-                pane: {
-                    startAngle: 0,
-                    endAngle: 360,
-                    background: {
-                        backgroundColor: '#050912',
-                        borderWidth: 1,
-                        borderColor: 'rgba(0, 240, 255, 0.15)',
-                        shape: 'circle'
-                    }
-                },
-                xAxis: {
-                    tickInterval: 45,
-                    min: 0,
-                    max: 360,
-                    lineColor: 'rgba(0, 240, 255, 0.15)',
-                    gridLineColor: 'rgba(0, 240, 255, 0.08)',
-                    labels: {
-                        formatter: function () { return labels[this.value] },
-                        style: { color: 'rgba(255, 255, 255, 0.6)', fontFamily: 'Orbitron', fontSize: '10px' }
-                    }
-                },
-                yAxis: {
-                    min: 0,
-                    max: 90,
-                    minorTickInterval: 10,
-                    tickInterval: 30,
-                    reversed: true,
-                    gridLineColor: 'rgba(0, 240, 255, 0.08)',
-                    labels: { enabled: false }
-                },
-                exporting: { enabled: false },
-                plotOptions: {
-                    bubble: {
-                        minSize: 18,
-                        maxSize: 18,
-                        dataLabels: {
-                            enabled: true,
-                            formatter: function () { return this.point.name },
-                            y: 3,
-                            style: {
-                                fontWeight: 'bold',
-                                fontSize: '9px',
-                                color: '#ffffff',
-                                textOutline: 'none'
-                            }
-                        },
-                        events: {
-                            show: function () {
-                                var name = this.name.split("(");
-                                var key = name[0] === 'GLONASS' ? 'GLONASS' : (name[0] === 'BeiDou' ? 'BeiDou' : (name[0] === 'QZSS' ? 'QZSS' : (name[0] === 'SBAS' ? 'SBAS' : name[0])));
-                                visstate[key] = true;
-                                dop = compute_dop(tind);
-                                updateDOPDisplay();
-                                updateLeafletMarkers(tind);
-                                drawGlobe();
-                                if (nsatchart) nsatchart.series[this.index].show();
-                            },
-                            hide: function () {
-                                var name = this.name.split("(");
-                                var key = name[0] === 'GLONASS' ? 'GLONASS' : (name[0] === 'BeiDou' ? 'BeiDou' : (name[0] === 'QZSS' ? 'QZSS' : (name[0] === 'SBAS' ? 'SBAS' : name[0])));
-                                visstate[key] = false;
-                                dop = compute_dop(tind);
-                                updateDOPDisplay();
-                                updateLeafletMarkers(tind);
-                                drawGlobe();
-                                if (nsatchart) nsatchart.series[this.index].hide();
-                            }
-                        },
-                        point: {
-                            events: {
-                                click: function() {
-                                    var sysKeys = ['gps', 'glo', 'gal', 'bds', 'qzs', 'sbs'];
-                                    var sysKey = sysKeys[this.series.index];
-                                    var prnOffset = 1;
-                                    if (sysKey === 'qzs') prnOffset = 193;
-                                    if (sysKey === 'sbs') prnOffset = 120;
-                                    var prnIndex = Number(this.name) - prnOffset;
-
-                                    selectedSatSys = sysKey;
-                                    selectedSatIndex = prnIndex;
-                                    drawSatelliteTrack(sysKey, prnIndex);
-                                    drawGlobe();
-                                    
-                                    // Refresh skyplot to show the active track polyline
-                                    skychartdraw(skyplts);
-                                }
-                            }
-                        }
-                    }
-                },
-                series: [
-                    {
-                        type: 'bubble',
-                        color: systemColors['gps'],
-                        data: skyplts["gps"],
-                        name: "GPS(" + skyplts["gps"].length + ")",
-                        visible: visstate["GPS"]
-                    },
-                    {
-                        type: 'bubble',
-                        color: systemColors['glo'],
-                        data: skyplts["glo"],
-                        name: "GLONASS(" + skyplts["glo"].length + ")",
-                        visible: visstate["GLONASS"]
-                    },
-                    {
-                        type: 'bubble',
-                        color: systemColors['gal'],
-                        data: skyplts["gal"],
-                        name: "Galileo(" + skyplts["gal"].length + ")",
-                        visible: visstate["Galileo"]
-                    },
-                    {
-                        type: 'bubble',
-                        color: systemColors['bds'],
-                        data: skyplts["bds"],
-                        name: "BeiDou(" + skyplts["bds"].length + ")",
-                        visible: visstate["BeiDou"]
-                    },
-                    {
-                        type: 'bubble',
-                        color: systemColors['qzs'],
-                        data: skyplts["qzs"],
-                        name: "QZSS(" + skyplts["qzs"].length + ")",
-                        visible: visstate["QZSS"]
-                    },
-                    {
-                        type: 'bubble',
-                        color: systemColors['sbs'],
-                        data: skyplts["sbs"],
-                        name: "SBAS(" + skyplts["sbs"].length + ")",
-                        visible: visstate["SBAS"]
-                    }
-                ]
-            };
-
-            // Overlay the active satellite's path as a line series if selected
-            if (selectedSatSys && selectedSatIndex >= 0) {
-                var activeKey = selectedSatSys.toUpperCase() === 'GLO' ? 'GLONASS' : (selectedSatSys.toUpperCase() === 'BDS' ? 'BeiDou' : (selectedSatSys.toUpperCase() === 'QZS' ? 'QZSS' : (selectedSatSys.toUpperCase() === 'SBS' ? 'SBAS' : selectedSatSys.toUpperCase())));
-                
-                // Only draw track if the parent constellation is visible
-                if (visstate[activeKey]) {
-                    var trackData = getSatellitePolarTrack(selectedSatSys, selectedSatIndex);
-                    if (trackData && trackData.length > 0) {
-                        var trackColor = systemColors[selectedSatSys.toLowerCase()] || '#ffffff';
-                        plotdata.series.push({
-                            type: 'line',
-                            name: 'Active Trajectory',
-                            color: trackColor,
-                            dashStyle: 'ShortDash',
-                            lineWidth: 1.5,
-                            showInLegend: false,
-                            marker: { enabled: false },
-                            data: trackData
-                        });
-                    }
-                }
-            }
-
-            skychart = new Highcharts.Chart(plotdata);
-        }
-
-        // ==========================================
-        // Interactive 3D Orbit Globe (Canvas Model)
-        // ==========================================
-        var canvas3D = null;
-        var ctx3D = null;
-        var globeScale = 100; // Pixels per Earth radius (6378.1 km)
-        var yaw = 0;   
-        var pitch = 0.5; 
-        var isDraggingGlobe = false;
-        var startMouseX, startMouseY;
-        var startYaw, startPitch;
-
-        function init3DGlobe() {
-            canvas3D = document.getElementById('globe-canvas');
-            ctx3D = canvas3D.getContext('2d');
-            
-            resizeGlobeCanvas();
-            window.addEventListener('resize', resizeGlobeCanvas);
-
-            // Drag handler
-            canvas3D.addEventListener('mousedown', function(e) {
-                isDraggingGlobe = true;
-                startMouseX = e.clientX;
-                startMouseY = e.clientY;
-                startYaw = yaw;
-                startPitch = pitch;
-            });
-
-            window.addEventListener('mousemove', function(e) {
-                if (!isDraggingGlobe) return;
-                var dx = e.clientX - startMouseX;
-                var dy = e.clientY - startMouseY;
-                
-                yaw = startYaw - dx * 0.007;
-                pitch = startPitch + dy * 0.007;
-                
-                // Bound pitch to keep polar perspective readable
-                pitch = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, pitch));
-                
-                drawGlobe();
-            });
-
-            window.addEventListener('mouseup', function() {
-                isDraggingGlobe = false;
-            });
-            
-            // Double click to align center directly on the observer
-            canvas3D.addEventListener('dblclick', function() {
-                yaw = -orglon * D2R;
-                pitch = orglat * D2R;
-                drawGlobe();
-            });
-            
-            // Align center directly on observer
-            yaw = -orglon * D2R;
-            pitch = orglat * D2R;
-        }
-
-        function resizeGlobeCanvas() {
-            if (!canvas3D) return;
-            var rect = canvas3D.parentElement.getBoundingClientRect();
-            canvas3D.width = rect.width;
-            canvas3D.height = rect.height;
-            drawGlobe();
-        }
-
-        function rotate3D(x, y, z, pitch, yaw) {
-            // Rotate around Z axis (yaw)
-            var cosY = Math.cos(yaw);
-            var sinY = Math.sin(yaw);
-            var x1 = x * cosY - y * sinY;
-            var y1 = x * sinY + y * cosY;
-            var z1 = z;
-            
-            // Rotate around X axis (pitch)
-            var cosX = Math.cos(pitch);
-            var sinX = Math.sin(pitch);
-            var x2 = x1;
-            var y2 = y1 * cosX - z1 * sinX;
-            var z2 = y1 * sinX + z1 * cosX;
-            
-            return { x: x2, y: y2, z: z2 };
-        }
-
-        function getObserverEcef() {
-            var lat = orgllh.latitude;
-            var lon = orgllh.longitude;
-            var R_obs = 6378.1;
-            return {
-                x: R_obs * Math.cos(lat) * Math.cos(lon),
-                y: R_obs * Math.cos(lat) * Math.sin(lon),
-                z: R_obs * Math.sin(lat)
-            };
-        }
-
-        function drawGlobe() {
-            if (!canvas3D || !ctx3D) return;
-            
-            var width = canvas3D.width;
-            var height = canvas3D.height;
-            var cx = width / 2;
-            var cy = height / 2;
-            
-            ctx3D.clearRect(0, 0, width, height);
-            
-            // 3D canvas solid background
-            ctx3D.fillStyle = '#050810';
-            ctx3D.fillRect(0, 0, width, height);
-            
-            var R = globeScale;
-            var scale = R / 6378.1; // scale: px/km
-            
-            // Shaded Earth sphere
-            var grad = ctx3D.createRadialGradient(
-                cx - R * 0.3, cy - R * 0.3, R * 0.1,
-                cx, cy, R
-            );
-            grad.addColorStop(0, '#16223b');
-            grad.addColorStop(0.7, '#0d1525');
-            grad.addColorStop(1, '#05080f');
-            
-            ctx3D.fillStyle = grad;
-            ctx3D.beginPath();
-            ctx3D.arc(cx, cy, R, 0, 2*Math.PI);
-            ctx3D.fill();
-            
-            // Earth grid lines
-            ctx3D.lineWidth = 0.5;
-            
-            // Latitudes (Parallels)
-            for (var latDeg = -60; latDeg <= 60; latDeg += 30) {
-                var latRad = latDeg * D2R;
-                var cosLat = Math.cos(latRad);
-                var sinLat = Math.sin(latRad);
-                
                 ctx3D.beginPath();
-                var first = true;
-                
-                for (var lonDeg = 0; lonDeg <= 360; lonDeg += 10) {
-                    var lonRad = lonDeg * D2R;
-                    var x = 6378.1 * cosLat * Math.cos(lonRad);
-                    var y = 6378.1 * cosLat * Math.sin(lonRad);
-                    var z = 6378.1 * sinLat;
-                    
-                    var pt = rotate3D(x, y, z, pitch, yaw);
-                    var px = cx + pt.x * scale;
-                    var py = cy - pt.y * scale;
-                    
-                    if (pt.z > 0) { 
-                        if (first) {
-                            ctx3D.moveTo(px, py);
-                            first = false;
-                        } else {
-                            ctx3D.lineTo(px, py);
-                        }
-                    } else {
-                        first = true;
-                    }
+                ctx3D.moveTo(obsPx, obsPy);
+                ctx3D.lineTo(satPx, satPy);
+
+                if (selectedSatSys === sys && selectedSatIndex === i) {
+                  ctx3D.strokeStyle = '#ffffff';
+                  ctx3D.lineWidth = 1.5;
+                } else {
+                  ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.2)';
+                  ctx3D.lineWidth = 0.5;
                 }
-                ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.08)';
                 ctx3D.stroke();
+              }
             }
+          }
+        }
 
-            // Longitudes (Meridians)
-            for (var lonDeg = 0; lonDeg < 360; lonDeg += 30) {
-                var lonRad = lonDeg * D2R;
-                var cosLon = Math.cos(lonRad);
-                var sinLon = Math.sin(lonRad);
-                
+        // Draw Satellites points
+        for (var sys in constellations) {
+          if (
+            !visstate[
+              sys === 'glo'
+                ? 'GLONASS'
+                : sys === 'bds'
+                  ? 'BeiDou'
+                  : sys === 'qzs'
+                    ? 'QZSS'
+                    : sys === 'sbs'
+                      ? 'SBAS'
+                      : sys.toUpperCase()
+            ]
+          )
+            continue;
+          var data = constellations[sys];
+          var llh = data.llh;
+          var color = systemColors[sys];
+          if (!llh) continue;
+
+          for (var i = 0; i < llh.length; i++) {
+            if (llh[i] && data.tles[i]) {
+              var satEcef = satellite.geodetic_to_ecf(llh[i]);
+              var satPt = rotate3D(satEcef.x, satEcef.y, satEcef.z, pitch, yaw);
+
+              // Check occlusion by Earth sphere
+              var satDist = Math.sqrt(satPt.x * satPt.x + satPt.y * satPt.y);
+              var isOcculted = satPt.z < 0 && satDist < 6378.1;
+
+              var satPx = cx + satPt.x * scale;
+              var satPy = cy - satPt.y * scale;
+
+              ctx3D.fillStyle = color;
+              var isSelected = selectedSatSys === sys && selectedSatIndex === i;
+
+              if (isOcculted) {
+                ctx3D.globalAlpha = 0.15;
                 ctx3D.beginPath();
-                var first = true;
-                for (var latDeg = -90; latDeg <= 90; latDeg += 5) {
-                    var latRad = latDeg * D2R;
-                    var x = 6378.1 * Math.cos(latRad) * cosLon;
-                    var y = 6378.1 * Math.cos(latRad) * sinLon;
-                    var z = 6378.1 * Math.sin(latRad);
-                    
-                    var pt = rotate3D(x, y, z, pitch, yaw);
-                    var px = cx + pt.x * scale;
-                    var py = cy - pt.y * scale;
-                    
-                    if (pt.z > 0) {
-                        if (first) {
-                            ctx3D.moveTo(px, py);
-                            first = false;
-                        } else {
-                            ctx3D.lineTo(px, py);
-                        }
-                    } else {
-                        first = true;
-                    }
-                }
-                ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.08)';
-                ctx3D.stroke();
-            }
-            
-            // Atmospheric ring glow
-            ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.2)';
-            ctx3D.lineWidth = 1.5;
-            ctx3D.beginPath();
-            ctx3D.arc(cx, cy, R, 0, 2*Math.PI);
-            ctx3D.stroke();
-            
-            // Draw Observer
-            var obsEcef = getObserverEcef();
-            var obsPt = rotate3D(obsEcef.x, obsEcef.y, obsEcef.z, pitch, yaw);
-            var obsPx = cx + obsPt.x * scale;
-            var obsPy = cy - obsPt.y * scale;
-            
-            var isObsVisible = obsPt.z > 0;
-            if (isObsVisible) {
-                ctx3D.fillStyle = '#00f0ff';
-                ctx3D.beginPath();
-                ctx3D.arc(obsPx, obsPy, 4.5, 0, 2*Math.PI);
+                ctx3D.arc(satPx, satPy, 2.5, 0, 2 * Math.PI);
                 ctx3D.fill();
-                
-                ctx3D.strokeStyle = '#ffffff';
-                ctx3D.lineWidth = 1;
-                ctx3D.stroke();
-                
-                ctx3D.fillStyle = '#ffffff';
-                ctx3D.font = 'bold 9px Orbitron';
-                ctx3D.fillText("OBS", obsPx + 7, obsPy + 3);
-            }
-            
-            // Draw Orbits and Satellites
-            drawGlobeSatellites(cx, cy, scale, obsEcef, obsPx, obsPy, isObsVisible);
-        }
+                ctx3D.globalAlpha = 1.0;
+              } else {
+                ctx3D.beginPath();
+                var sz = isSelected ? 4.5 : 2.5;
+                ctx3D.arc(satPx, satPy, sz, 0, 2 * Math.PI);
+                ctx3D.fill();
 
-        function drawGlobeSatellites(cx, cy, scale, obsEcef, obsPx, obsPy, isObsVisible) {
-            var constellations = {
-                'gps': { llh: gpsllhs[tind], tles: gpstles, prefix: 'G', offset: 1 },
-                'glo': { llh: glollhs[tind], tles: glotles, prefix: 'R', offset: 1 },
-                'gal': { llh: galllhs[tind], tles: galtles, prefix: 'E', offset: 1 },
-                'bds': { llh: bdsllhs[tind], tles: bdstles, prefix: 'C', offset: 1 },
-                'qzs': { llh: qzsllhs[tind], tles: qzstles, prefix: 'J', offset: 193 },
-                'sbs': { llh: sbsllhs[tind], tles: sbstles, prefix: 'S', offset: 120 }
-            };
-            
-            // Draw Lines of Sight paths
-            ctx3D.lineWidth = 0.5;
-            for (var sys in constellations) {
-                if (!visstate[sys === 'glo' ? 'GLONASS' : (sys === 'bds' ? 'BeiDou' : (sys === 'qzs' ? 'QZSS' : (sys === 'sbs' ? 'SBAS' : sys.toUpperCase())))]) continue;
-                var data = constellations[sys];
-                var llh = data.llh;
-                if (!llh) continue;
-                var azelArray = null;
-                switch (sys) {
-                    case 'gps': azelArray = gpsazels[tind]; break;
-                    case 'glo': azelArray = gloazels[tind]; break;
-                    case 'gal': azelArray = galazels[tind]; break;
-                    case 'bds': azelArray = bdsazels[tind]; break;
-                    case 'qzs': azelArray = qzsazels[tind]; break;
-                    case 'sbs': azelArray = sbsazels[tind]; break;
+                if (isSelected) {
+                  ctx3D.strokeStyle = '#ffffff';
+                  ctx3D.lineWidth = 1;
+                  ctx3D.beginPath();
+                  ctx3D.arc(satPx, satPy, sz + 2.5, 0, 2 * Math.PI);
+                  ctx3D.stroke();
                 }
-                
-                for (var i = 0; i < llh.length; i++) {
-                    if (llh[i] && data.tles[i]) {
-                        var azel = azelArray ? azelArray[i] : null;
-                        if (azel && azel.elevation > elemask) {
-                            var satEcef = satellite.geodetic_to_ecf(llh[i]);
-                            var satPt = rotate3D(satEcef.x, satEcef.y, satEcef.z, pitch, yaw);
-                            var satPx = cx + satPt.x * scale;
-                            var satPy = cy - satPt.y * scale;
-                            
-                            ctx3D.beginPath();
-                            ctx3D.moveTo(obsPx, obsPy);
-                            ctx3D.lineTo(satPx, satPy);
-                            
-                            if (selectedSatSys === sys && selectedSatIndex === i) {
-                                ctx3D.strokeStyle = '#ffffff';
-                                ctx3D.lineWidth = 1.5;
-                            } else {
-                                ctx3D.strokeStyle = 'rgba(0, 240, 255, 0.2)';
-                                ctx3D.lineWidth = 0.5;
-                            }
-                            ctx3D.stroke();
-                        }
-                    }
-                }
+
+                var nameStr = data.prefix + (i + data.offset).toString();
+                ctx3D.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx3D.font = isSelected ? 'bold 9px Inter' : '8px Inter';
+                ctx3D.fillText(nameStr, satPx + 5, satPy + 3);
+              }
             }
-            
-            // Draw Satellites points
-            for (var sys in constellations) {
-                if (!visstate[sys === 'glo' ? 'GLONASS' : (sys === 'bds' ? 'BeiDou' : (sys === 'qzs' ? 'QZSS' : (sys === 'sbs' ? 'SBAS' : sys.toUpperCase())))]) continue;
-                var data = constellations[sys];
-                var llh = data.llh;
-                var color = systemColors[sys];
-                if (!llh) continue;
-                
-                for (var i = 0; i < llh.length; i++) {
-                    if (llh[i] && data.tles[i]) {
-                        var satEcef = satellite.geodetic_to_ecf(llh[i]);
-                        var satPt = rotate3D(satEcef.x, satEcef.y, satEcef.z, pitch, yaw);
-                        
-                        // Check occlusion by Earth sphere
-                        var satDist = Math.sqrt(satPt.x * satPt.x + satPt.y * satPt.y);
-                        var isOcculted = (satPt.z < 0) && (satDist < 6378.1);
-                        
-                        var satPx = cx + satPt.x * scale;
-                        var satPy = cy - satPt.y * scale;
-                        
-                        ctx3D.fillStyle = color;
-                        var isSelected = (selectedSatSys === sys && selectedSatIndex === i);
-                        
-                        if (isOcculted) {
-                            ctx3D.globalAlpha = 0.15;
-                            ctx3D.beginPath();
-                            ctx3D.arc(satPx, satPy, 2.5, 0, 2*Math.PI);
-                            ctx3D.fill();
-                            ctx3D.globalAlpha = 1.0;
-                        } else {
-                            ctx3D.beginPath();
-                            var sz = isSelected ? 4.5 : 2.5;
-                            ctx3D.arc(satPx, satPy, sz, 0, 2*Math.PI);
-                            ctx3D.fill();
-                            
-                            if (isSelected) {
-                                ctx3D.strokeStyle = '#ffffff';
-                                ctx3D.lineWidth = 1;
-                                ctx3D.beginPath();
-                                ctx3D.arc(satPx, satPy, sz + 2.5, 0, 2*Math.PI);
-                                ctx3D.stroke();
-                            }
-                            
-                            var nameStr = data.prefix + (i + data.offset).toString();
-                            ctx3D.fillStyle = 'rgba(255, 255, 255, 0.7)';
-                            ctx3D.font = isSelected ? 'bold 9px Inter' : '8px Inter';
-                            ctx3D.fillText(nameStr, satPx + 5, satPy + 3);
-                        }
-                    }
-                }
-            }
+          }
         }
+      }
     </script>
-</body>
+  </body>
 </html>
