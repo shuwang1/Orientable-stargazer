@@ -5,8 +5,8 @@
  * License: MIT
  */
 
-function initl(initl_parameters){
-    /*-----------------------------------------------------------------------------
+function initl(initl_parameters) {
+  /*-----------------------------------------------------------------------------
     *
     *                           procedure initl
     *
@@ -57,88 +57,90 @@ function initl(initl_parameters){
     *    vallado, crawford, hujsak, kelso  2006
       ----------------------------------------------------------------------------*/
 
-    'use strict';
-    var satn    = initl_parameters.satn,
-        ecco    = initl_parameters.ecco,
-        epoch   = initl_parameters.epoch,
-        inclo   = initl_parameters.inclo,
-        no      = initl_parameters.no,
-        method  = initl_parameters.method,
-        opsmode = initl_parameters.opsmode;
+  'use strict';
+  var satn = initl_parameters.satn,
+    ecco = initl_parameters.ecco,
+    epoch = initl_parameters.epoch,
+    inclo = initl_parameters.inclo,
+    no = initl_parameters.no,
+    method = initl_parameters.method,
+    opsmode = initl_parameters.opsmode;
 
-    var ak, d1,  del,  adel, po, gsto;
+  var ak, d1, del, adel, po, gsto;
 
-    // sgp4fix use old way of finding gst
-    //  ----------------------- earth constants ----------------------
-    //  sgp4fix identify constants and allow alternate values
+  // sgp4fix use old way of finding gst
+  //  ----------------------- earth constants ----------------------
+  //  sgp4fix identify constants and allow alternate values
 
-    //  ------------- calculate auxillary epoch quantities ----------
-    var eccsq  = ecco * ecco;
-    var omeosq = 1.0 - eccsq;
-    var rteosq = Math.sqrt(omeosq);
-    var cosio  = Math.cos(inclo);
-    var cosio2 = cosio * cosio;
+  //  ------------- calculate auxillary epoch quantities ----------
+  var eccsq = ecco * ecco;
+  var omeosq = 1.0 - eccsq;
+  var rteosq = Math.sqrt(omeosq);
+  var cosio = Math.cos(inclo);
+  var cosio2 = cosio * cosio;
 
-    //  ------------------ un-kozai the mean motion -----------------
-    ak    = Math.pow(xke / no, x2o3);
-    d1    = 0.75 * j2 * (3.0 * cosio2 - 1.0) / (rteosq * omeosq);
-    var del_prime  = d1 / (ak * ak);
-    adel  = ak * (1.0 - del_prime * del_prime - del_prime *
-             (1.0 / 3.0 + 134.0 * del_prime * del_prime / 81.0));
-    del_prime  = d1/(adel * adel);
-    no    = no / (1.0 + del_prime);
+  //  ------------------ un-kozai the mean motion -----------------
+  ak = Math.pow(xke / no, x2o3);
+  d1 = (0.75 * j2 * (3.0 * cosio2 - 1.0)) / (rteosq * omeosq);
+  var del_prime = d1 / (ak * ak);
+  adel =
+    ak *
+    (1.0 -
+      del_prime * del_prime -
+      del_prime * (1.0 / 3.0 + (134.0 * del_prime * del_prime) / 81.0));
+  del_prime = d1 / (adel * adel);
+  no = no / (1.0 + del_prime);
 
-    var ao    = Math.pow(xke / no, x2o3);
-    var sinio = Math.sin(inclo);
-    po    = ao * omeosq;
-    var con42 = 1.0 - 5.0 * cosio2;
-    var con41 = -con42-cosio2-cosio2;
-    var ainv  = 1.0 / ao;
-    var posq  = po * po;
-    var rp    = ao * (1.0 - ecco);
-    method = 'n';
+  var ao = Math.pow(xke / no, x2o3);
+  var sinio = Math.sin(inclo);
+  po = ao * omeosq;
+  var con42 = 1.0 - 5.0 * cosio2;
+  var con41 = -con42 - cosio2 - cosio2;
+  var ainv = 1.0 / ao;
+  var posq = po * po;
+  var rp = ao * (1.0 - ecco);
+  method = 'n';
 
-    //  sgp4fix modern approach to finding sidereal time
-    if (opsmode === 'a') {
-        //  sgp4fix use old way of finding gst
-        //  count integer number of days from 0 jan 1970
-        var ts70  = epoch - 7305.0;
-        var ds70 = Math.floor(ts70 + 1.0e-8);
-        var tfrac = ts70 - ds70;
-        //  find greenwich location at epoch
-        var c1    = 1.72027916940703639e-2;
-        var thgr70= 1.7321343856509374;
-        var fk5r  = 5.07551419432269442e-15;
-        var c1p2p = c1 + twopi;
-        gsto  = ( thgr70 + c1*ds70 + c1p2p*tfrac + ts70*ts70*fk5r) % twopi;
-        if (gsto < 0.0){
-            gsto = gsto + twopi;
-        }
+  //  sgp4fix modern approach to finding sidereal time
+  if (opsmode === 'a') {
+    //  sgp4fix use old way of finding gst
+    //  count integer number of days from 0 jan 1970
+    var ts70 = epoch - 7305.0;
+    var ds70 = Math.floor(ts70 + 1.0e-8);
+    var tfrac = ts70 - ds70;
+    //  find greenwich location at epoch
+    var c1 = 1.72027916940703639e-2;
+    var thgr70 = 1.7321343856509374;
+    var fk5r = 5.07551419432269442e-15;
+    var c1p2p = c1 + twopi;
+    gsto = (thgr70 + c1 * ds70 + c1p2p * tfrac + ts70 * ts70 * fk5r) % twopi;
+    if (gsto < 0.0) {
+      gsto = gsto + twopi;
     }
-    else {
-       gsto = gstime(epoch + 2433281.5);
-    }
+  } else {
+    gsto = gstime(epoch + 2433281.5);
+  }
 
-    var initl_results = {
-        no : no,
+  var initl_results = {
+    no: no,
 
-        method : method,
+    method: method,
 
-        ainv : ainv,
-        ao : ao,
-        con41 : con41,
-        con42 : con42,
-        cosio : cosio,
+    ainv: ainv,
+    ao: ao,
+    con41: con41,
+    con42: con42,
+    cosio: cosio,
 
-        cosio2 : cosio2,
-        eccsq : eccsq,
-        omeosq : omeosq,
-        posq : posq,
+    cosio2: cosio2,
+    eccsq: eccsq,
+    omeosq: omeosq,
+    posq: posq,
 
-        rp : rp,
-        rteosq : rteosq,
-        sinio : sinio ,
-        gsto : gsto
-    };
-    return initl_results;
+    rp: rp,
+    rteosq: rteosq,
+    sinio: sinio,
+    gsto: gsto,
+  };
+  return initl_results;
 }
