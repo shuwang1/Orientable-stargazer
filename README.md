@@ -2,7 +2,7 @@
 
 **Orientable Stargazer** is a high-fidelity GNSS Constellation Simulator and Visualizer. It features a modern, high-contrast "Cyber/Instrument" dashboard designed for real-time analysis of global navigation satellite systems.
 
-![UI Preview](https://via.placeholder.com/800x400.png?text=Orientable+Stargazer+Dashboard+Preview) *(Placeholder for screenshot)*
+![UI Preview](<img width="3772" height="2076" alt="screen-2026-05-31-13-51-22" src="https://github.com/user-attachments/assets/c78adbc0-3b34-4903-82d4-b2cb2f6e4df9" />eview) *(Placeholder for screenshot)*
 
 ---
 
